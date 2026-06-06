@@ -18,6 +18,8 @@ class Video extends Model
         'privacy',
         'duration_seconds',
         'security_settings',
+        'views',
+        'size_bytes',
     ];
 
     protected $casts = [

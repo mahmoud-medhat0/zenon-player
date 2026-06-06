@@ -13,13 +13,14 @@ class VideoUploadController extends Controller
     {
         $request->validate([
             'title' => 'required|string|max:255',
-            'file_size' => 'required|numeric',
+            'file_size' => 'required|numeric|max:10737418240', // 10GB max
         ]);
 
         $video = Video::create([
             'title' => $request->title,
             'status' => 'uploading',
             'privacy' => 'private',
+            'size_bytes' => $request->file_size,
         ]);
 
         $uploadId = Str::random(40);
@@ -36,8 +37,8 @@ class VideoUploadController extends Controller
         $video = Video::findOrFail($id);
         
         $request->validate([
-            'chunk' => 'required|file',
-            'chunk_index' => 'required|integer',
+            'chunk' => 'required|file|mimes:mp4,quicktime|max:10485760', // 10MB per chunk
+            'chunk_index' => 'required|integer|min:0',
             'upload_id' => 'required|string'
         ]);
 
@@ -61,7 +62,7 @@ class VideoUploadController extends Controller
         $video = Video::findOrFail($id);
         $request->validate([
             'upload_id' => 'required|string',
-            'total_chunks' => 'required|integer'
+            'total_chunks' => 'required|integer|min:1'
         ]);
 
         $uploadId = $request->upload_id;
@@ -86,14 +87,11 @@ class VideoUploadController extends Controller
         }
         fclose($finalFileStream);
 
-        // Move to permanent storage
         $finalPath = "videos/{$video->tenant_id}/{$video->id}.mp4";
         Storage::disk('local')->put($finalPath, fopen("{$tempDir}/final.mp4", 'r'));
 
-        // Clean up temp directory
         Storage::disk('local')->deleteDirectory($tempPath);
 
-        // Update video status
         $video->update([
             'status' => 'processing'
         ]);

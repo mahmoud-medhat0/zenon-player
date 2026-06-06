@@ -10,19 +10,19 @@ class VideoController extends Controller
 {
     public function index(Request $request)
     {
-        $videos = Video::latest()->get();
+        $videos = Video::latest()->paginate(20);
         
-        $videos->transform(function($video) {
+        $videos->getCollection()->transform(function($video) {
             return [
                 'id' => $video->id,
                 'title' => $video->title,
                 'status' => $video->status,
-                'views' => '0',
+                'views' => $video->views,
                 'date' => $video->created_at->diffForHumans(),
                 'duration' => $video->duration_seconds ? gmdate($video->duration_seconds >= 3600 ? "H:i:s" : "i:s", $video->duration_seconds) : '--:--',
                 'thumbnail' => $video->status === 'ready' 
-                    ? "http://localhost:8000/api/videos/{$video->id}/thumbnail"
-                    : 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80',
+                    ? url("/api/videos/{$video->id}/thumbnail")
+                    : null,
             ];
         });
 
@@ -60,7 +60,6 @@ class VideoController extends Controller
     {
         $video = Video::findOrFail($id);
 
-        // Delete from storage
         Storage::disk('local')->deleteDirectory("videos/{$video->tenant_id}/{$video->id}_data");
         Storage::disk('local')->delete("videos/{$video->tenant_id}/{$video->id}.mp4");
 
@@ -73,12 +72,33 @@ class VideoController extends Controller
     {
         $video = Video::findOrFail($id);
         
-        // Basic path traversal prevention
-        $file = str_replace(['..', '\\', '//'], '', $file); 
+        $file = basename($file);
+        
+        $allowedExtensions = ['m3u8', 'ts'];
+        $extension = pathinfo($file, PATHINFO_EXTENSION);
+        if (!in_array($extension, $allowedExtensions)) {
+            abort(403, 'Invalid file type');
+        }
+        
         $path = "videos/{$video->tenant_id}/{$video->id}_data/hls/{$file}";
+        
+        $realPath = realpath(storage_path("app/private/" . $path));
+        $allowedDir = realpath(storage_path("app/private/videos/{$video->tenant_id}/{$video->id}_data/hls"));
+        
+        if ($realPath === false || $allowedDir === false || strpos($realPath, $allowedDir) !== 0) {
+            abort(403, 'Access denied');
+        }
         
         if (!Storage::disk('local')->exists($path)) {
             abort(404);
+        }
+        
+        if ($file === 'playlist.m3u8') {
+            $sessionKey = "video_view_{$video->id}";
+            if (!session()->has($sessionKey)) {
+                $video->increment('views');
+                session()->put($sessionKey, true);
+            }
         }
         
         $mime = 'application/vnd.apple.mpegurl';

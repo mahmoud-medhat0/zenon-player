@@ -20,6 +20,10 @@ class ProcessVideo implements ShouldQueue
 
     public $video;
 
+    public int $tries = 3;
+    public int $backoff = 60;
+    public int $maxExceptions = 3;
+
     public function __construct(Video $video)
     {
         $this->video = $video;
@@ -34,7 +38,6 @@ class ProcessVideo implements ShouldQueue
         $videoFolder = "{$basePath}/{$this->video->id}_data";
 
         try {
-            // 1. Extract Thumbnail
             $thumbnailPath = "{$videoFolder}/thumbnail.jpg";
             FFMpeg::fromDisk('local')
                 ->open($sourceFile)
@@ -43,59 +46,59 @@ class ProcessVideo implements ShouldQueue
                 ->toDisk('local')
                 ->save($thumbnailPath);
 
-            // 2. Transcode to HLS (Dynamic Qualities)
             $hlsPath = "{$videoFolder}/hls/playlist.m3u8";
 
-            // Inspect the video height using one FFmpeg instance
             $inspector = FFMpeg::fromDisk('local')->open($sourceFile);
             $height = $inspector->getVideoStream()->getDimensions()->getHeight();
 
-            // Export using a fresh FFmpeg instance (required for AdvancedMedia internally)
             $hlsExporter = FFMpeg::fromDisk('local')
                 ->open($sourceFile)
                 ->exportForHLS()
-                ->setSegmentLength(10) // 10 second segments
-                ->setKeyFrameInterval(48); // assuming 24fps
+                ->setSegmentLength(10)
+                ->setKeyFrameInterval(48);
 
             $qualities = [
-                ['height' => 360, 'bitrate' => 500, 'width' => 640],
-                ['height' => 480, 'bitrate' => 1000, 'width' => 854],
-                ['height' => 720, 'bitrate' => 2000, 'width' => 1280],
-                ['height' => 1080, 'bitrate' => 4000, 'width' => 1920],
-                ['height' => 1440, 'bitrate' => 8000, 'width' => 2560], // 2K
-                ['height' => 2160, 'bitrate' => 16000, 'width' => 3840], // 4K
-                ['height' => 4320, 'bitrate' => 40000, 'width' => 7680] // 8K
+                ['height' => 360, 'bitrate' => 500, 'width' => 640, 'label' => '360p'],
+                ['height' => 480, 'bitrate' => 1000, 'width' => 854, 'label' => '480p'],
+                ['height' => 720, 'bitrate' => 2000, 'width' => 1280, 'label' => '720p'],
+                ['height' => 1080, 'bitrate' => 4000, 'width' => 1920, 'label' => '1080p'],
+                ['height' => 1440, 'bitrate' => 8000, 'width' => 2560, 'label' => '1440p'],
+                ['height' => 2160, 'bitrate' => 16000, 'width' => 3840, 'label' => '2160p'],
+                ['height' => 4320, 'bitrate' => 40000, 'width' => 7680, 'label' => '4320p']
             ];
 
             $addedFormat = false;
+            $transcodedQualities = [];
             foreach ($qualities as $q) {
-                // Generate format if source is at least 90% of the target height (tolerance for odd aspect ratios)
                 if ($height >= $q['height'] * 0.9) {
                     $format = (new X264('aac'))->setKiloBitrate($q['bitrate']);
                     $hlsExporter->addFormat($format, function($m) use ($q) {
                         $m->scale($q['width'], $q['height']);
                     });
                     $addedFormat = true;
+                    $transcodedQualities[] = $q;
                 }
             }
 
-            // Fallback: If the video is smaller than 360p, just export at original resolution
             if (!$addedFormat) {
                 $format = (new X264('aac'))->setKiloBitrate(300);
                 $hlsExporter->addFormat($format);
+                $transcodedQualities[] = ['height' => $height, 'bitrate' => 300, 'width' => null, 'label' => 'original'];
             }
 
             $hlsExporter->toDisk('local')->save($hlsPath);
 
-            // 3. Create Video Version record
-            VideoVersion::create([
-                'video_id' => $this->video->id,
-                'resolution' => '720p',
-                'storage_path' => $hlsPath,
-                'storage_disk' => 'local',
-            ]);
+            VideoVersion::where('video_id', $this->video->id)->delete();
+            
+            foreach ($transcodedQualities as $q) {
+                VideoVersion::create([
+                    'video_id' => $this->video->id,
+                    'resolution' => $q['label'],
+                    'storage_path' => $hlsPath,
+                    'storage_disk' => 'local',
+                ]);
+            }
 
-            // 4. Update Video Status and Duration
             $durationInSeconds = FFMpeg::fromDisk('local')->open($sourceFile)->getDurationInSeconds();
             
             $this->video->update([
@@ -110,5 +113,11 @@ class ProcessVideo implements ShouldQueue
             $this->video->update(['status' => 'failed']);
             throw $e;
         }
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        Log::error("Video processing permanently failed for Video ID: {$this->video->id}: " . ($exception?->getMessage() ?? 'Unknown error'));
+        $this->video->update(['status' => 'failed']);
     }
 }

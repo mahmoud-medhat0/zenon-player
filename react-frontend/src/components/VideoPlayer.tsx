@@ -38,7 +38,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose }) =>
     const video = videoRef.current;
     if (!video) return;
 
-    const streamUrl = `http://localhost:8000/api/videos/${videoId}/stream/playlist.m3u8`;
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+    const streamUrl = `${apiBase}/videos/${videoId}/stream/playlist.m3u8`;
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -75,7 +76,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose }) =>
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = streamUrl;
+      if (token) {
+        fetch(streamUrl, { headers: { 'Authorization': `Bearer ${token}` } })
+          .then(res => res.blob())
+          .then(blob => {
+            video.src = URL.createObjectURL(blob);
+          })
+          .catch(() => {
+            video.src = streamUrl;
+          });
+      } else {
+        video.src = streamUrl;
+      }
       video.addEventListener('loadedmetadata', () => {
         video.play().then(() => setIsPlaying(true)).catch(e => console.error("Autoplay prevented:", e));
       });

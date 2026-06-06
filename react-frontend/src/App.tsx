@@ -4,6 +4,7 @@ import { useAuth } from './context/AuthContext';
 import api from './api/client';
 import { confirmDelete, showSuccess, showError } from './utils/alerts';
 import VideoPlayer from './components/VideoPlayer';
+import SecureImage from './components/SecureImage';
 
 function App() {
   const { user, login, register, logout, loading } = useAuth();
@@ -40,11 +41,89 @@ function App() {
   // User Dropdown State
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
+  // Analytics State
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+
+  // Settings State
+  const [settingsName, setSettingsName] = useState('');
+  const [settingsEmail, setSettingsEmail] = useState('');
+  const [settingsTenant, setSettingsTenant] = useState('');
+  const [settingsCurrentPassword, setSettingsCurrentPassword] = useState('');
+  const [settingsNewPassword, setSettingsNewPassword] = useState('');
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setSettingsName(user.name || '');
+      setSettingsEmail(user.email || '');
+      setSettingsTenant(user.tenant?.name || '');
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (activeTab === 'analytics' && !analytics) {
+      const fetchAnalytics = async () => {
+        setIsLoadingAnalytics(true);
+        try {
+          const res = await api.get('/analytics');
+          setAnalytics(res.data);
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setIsLoadingAnalytics(false);
+        }
+      };
+      fetchAnalytics();
+    }
+  }, [activeTab, analytics]);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingSettings(true);
+    try {
+      await api.put('/settings/profile', { name: settingsName, email: settingsEmail });
+      showSuccess('Profile updated successfully');
+    } catch (err: any) {
+      showError('Failed to update profile', err.response?.data?.message);
+    } finally {
+      setIsUpdatingSettings(false);
+    }
+  };
+
+  const handleUpdateTenant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingSettings(true);
+    try {
+      await api.put('/settings/tenant', { name: settingsTenant });
+      showSuccess('Workspace updated successfully');
+    } catch (err: any) {
+      showError('Failed to update workspace', err.response?.data?.message);
+    } finally {
+      setIsUpdatingSettings(false);
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingSettings(true);
+    try {
+      await api.put('/settings/password', { current_password: settingsCurrentPassword, new_password: settingsNewPassword });
+      showSuccess('Password updated successfully');
+      setSettingsCurrentPassword('');
+      setSettingsNewPassword('');
+    } catch (err: any) {
+      showError('Failed to update password', err.response?.data?.message);
+    } finally {
+      setIsUpdatingSettings(false);
+    }
+  };
+
   const fetchVideos = async () => {
     if (user) {
       try {
         const res = await api.get('/videos');
-        setVideos(res.data);
+        setVideos(res.data.data || res.data);
       } catch (err) {
         console.error(err);
       } finally {
@@ -59,16 +138,18 @@ function App() {
     const pollVideos = async () => {
       try {
         const res = await api.get('/videos');
-        setVideos(res.data);
+        const videoList = res.data.data || res.data;
+        setVideos(videoList);
         setIsLoadingVideos(false);
 
-        const hasProcessing = res.data.some((v: any) => v.status === 'processing');
+        const hasProcessing = videoList.some((v: any) => v.status === 'processing');
         if (hasProcessing && !interval) {
           interval = setInterval(async () => {
             try {
               const pollRes = await api.get('/videos');
-              setVideos(pollRes.data);
-              if (!pollRes.data.some((v: any) => v.status === 'processing')) {
+              const polledList = pollRes.data.data || pollRes.data;
+              setVideos(polledList);
+              if (!polledList.some((v: any) => v.status === 'processing')) {
                 clearInterval(interval);
                 interval = null;
               }
@@ -300,7 +381,7 @@ function App() {
         {playingVideo && (
           <VideoPlayer
             videoId={playingVideo}
-            token={localStorage.getItem('token')}
+            token={localStorage.getItem('auth_token')}
             onClose={() => setPlayingVideo(null)}
           />
         )}
@@ -329,16 +410,16 @@ function App() {
           </div>
         </div>
 
-        <ul className="nav-menu">
-          <li className={`nav-item ${activeTab === 'library' ? 'active' : ''}`} onClick={() => setActiveTab('library')}>
+        <ul className="nav-menu" role="navigation" aria-label="Main navigation">
+          <li className={`nav-item ${activeTab === 'library' ? 'active' : ''}`} onClick={() => setActiveTab('library')} role="button" tabIndex={0} aria-current={activeTab === 'library' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('library')}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
             Library
           </li>
-          <li className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')}>
+          <li className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')} role="button" tabIndex={0} aria-current={activeTab === 'analytics' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('analytics')}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
             Analytics
           </li>
-          <li className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+          <li className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')} role="button" tabIndex={0} aria-current={activeTab === 'settings' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('settings')}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
             Settings
           </li>
@@ -359,17 +440,48 @@ function App() {
             </button>
             
             <div style={{ position: 'relative' }}>
-              <button className="avatar-btn" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
+              <button className="avatar-btn" onClick={() => setIsDropdownOpen(!isDropdownOpen)} aria-expanded={isDropdownOpen} aria-haspopup="true" aria-label="User menu">
                 <img src={`https://ui-avatars.com/api/?name=${user.name}&background=4f46e5&color=fff`} alt={user.name} className="avatar-img" />
               </button>
               
               {isDropdownOpen && (
-                <div className="glass-panel animate-fade-in" style={{ position: 'absolute', top: '120%', right: '0', width: '220px', borderRadius: '12px', padding: '8px', zIndex: 100 }}>
-                  <div style={{ padding: '12px', borderBottom: '1px solid var(--border-color)', marginBottom: '8px' }}>
-                    <div style={{ fontWeight: 600 }}>{user.name}</div>
-                    <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{user.email}</div>
+                <div style={{ 
+                  position: 'absolute', 
+                  top: 'calc(100% + 12px)', 
+                  right: 0, 
+                  width: '280px', 
+                  background: 'var(--bg-sidebar)', 
+                  borderRadius: '16px', 
+                  border: '1px solid var(--border-color)', 
+                  padding: '16px', 
+                  boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+                  zIndex: 50,
+                  animation: 'fadeIn 0.2s ease'
+                }}>
+                  <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)', overflow: 'hidden' }}>
+                    <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={user?.name}>{user?.name}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={user?.email}>{user?.email}</div>
                   </div>
-                  <button onClick={logout} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', border: 'none', color: '#ef4444', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500 }} onMouseOver={e => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'} onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                  
+                  <button 
+                    onClick={logout}
+                    onMouseOver={e => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                    onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                    style={{ 
+                      width: '100%', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '12px', 
+                      background: 'transparent', 
+                      border: 'none', 
+                      color: '#ef4444', 
+                      padding: '8px', 
+                      cursor: 'pointer',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontWeight: 500
+                    }}
+                  >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
                     Sign out
                   </button>
@@ -380,63 +492,351 @@ function App() {
         </header>
 
         <div className="dashboard animate-fade-in">
-          <div className="page-header">
-            <div>
-              <h1 className="section-title">Video Library</h1>
-              <p className="section-subtitle">Manage and organize your video assets</p>
-            </div>
-          </div>
-          
-          <div className="video-grid">
-            {isLoadingVideos ? (
-               <div style={{ color: 'var(--text-muted)' }}>Loading your library...</div>
-            ) : videos.length === 0 ? (
-               <div style={{ color: 'var(--text-muted)' }}>Your library is empty. Upload a video to get started!</div>
-            ) : videos.map((video, index) => (
-              <div key={video.id} className="video-card" style={{ animation: `fadeIn 0.5s ease forwards ${index * 0.1}s`, opacity: 0 }}>
-                <div className="thumbnail-wrapper">
-                  <img src={video.thumbnail} alt={video.title} className="thumbnail" />
-                  <div className="duration" style={{ backgroundColor: video.status === 'failed' ? 'rgba(239, 68, 68, 0.9)' : undefined }}>
-                    {video.status === 'ready' ? video.duration : video.status === 'failed' ? 'Failed' : 'Processing...'}
+          {activeTab === 'library' && (
+            <>
+              <div className="page-header">
+                <div>
+                  <h1 className="section-title">Video Library</h1>
+                  <p className="section-subtitle">Manage and organize your video assets</p>
+                </div>
+              </div>
+              
+              <div className="video-grid">
+                {isLoadingVideos ? (
+                   <div style={{ color: 'var(--text-muted)' }}>Loading your library...</div>
+                ) : videos.length === 0 ? (
+                   <div style={{ color: 'var(--text-muted)' }}>Your library is empty. Upload a video to get started!</div>
+                ) : videos.map((video, index) => (
+                  <div key={video.id} className="video-card" style={{ animation: `fadeIn 0.5s ease forwards ${index * 0.1}s`, opacity: 0 }}>
+                    <div className="thumbnail-wrapper">
+                      <SecureImage src={video.thumbnail} alt={video.title} className="thumbnail" />
+                      <div className="duration" style={{ backgroundColor: video.status === 'failed' ? 'rgba(239, 68, 68, 0.9)' : undefined }}>
+                        {video.status === 'ready' ? video.duration : video.status === 'failed' ? 'Failed' : 'Processing...'}
+                      </div>
+                      <div className="play-overlay" onClick={() => { if(video.status === 'ready') setPlayingVideo(video.id); }}>
+                        <div className="play-icon">
+                          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="video-info">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <h3 className="video-title">{video.title}</h3>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setEditingVideo(video); setEditTitle(video.title); }}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+                          onMouseOver={e => e.currentTarget.style.color = 'var(--text-main)'}
+                          onMouseOut={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+                        </button>
+                      </div>
+                      <div className="video-meta">
+                        <div className="meta-item">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                          {video.views}
+                        </div>
+                        <div className="meta-item">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                          {video.date}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="play-overlay" onClick={() => { if(video.status === 'ready') setPlayingVideo(video.id); }}>
-                    <div className="play-icon">
-                      <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                ))}
+              </div>
+            </>
+          )}
+
+          {activeTab === 'analytics' && (
+            <div className="animate-fade-in">
+              <div className="page-header">
+                <div>
+                  <h1 className="section-title">Analytics</h1>
+                  <p className="section-subtitle">Insights into your video performance</p>
+                </div>
+              </div>
+              {isLoadingAnalytics ? (
+                <div style={{ color: 'var(--text-muted)' }}>Loading analytics...</div>
+              ) : analytics ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '24px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>Total Videos</div>
+                    <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{analytics.total_videos}</div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>Total Views</div>
+                    <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{analytics.total_views}</div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>Total Duration</div>
+                    <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{analytics.total_duration}</div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>Storage Used</div>
+                    <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{analytics.storage_used}</div>
+                  </div>
+                  
+                  <div style={{ gridColumn: '1 / -1', marginTop: '8px', background: 'rgba(255,255,255,0.03)', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>Recent Activity</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {analytics.recent_activity.map((act: any, i: number) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: i !== analytics.recent_activity.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
+                          <span style={{ color: 'var(--text-main)' }}>{act.action}</span>
+                          <span style={{ color: 'var(--text-muted)' }}>{act.date}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
-                <div className="video-info">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <h3 className="video-title">{video.title}</h3>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setEditingVideo(video); setEditTitle(video.title); }}
-                      style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
-                      onMouseOver={e => e.currentTarget.style.color = 'var(--text-main)'}
-                      onMouseOut={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
-                    </button>
+              ) : (
+                <div style={{ color: 'var(--text-muted)' }}>Failed to load analytics.</div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'settings' && (
+            <div className="animate-fade-in" style={{ maxWidth: '900px', margin: '0 auto', width: '100%' }}>
+              <div className="page-header" style={{ marginBottom: '48px' }}>
+                <div>
+                  <h1 className="section-title">Settings</h1>
+                  <p className="section-subtitle">Manage your account and workspace preferences</p>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                {/* Profile Section */}
+                <div className="settings-glass-card">
+                  <div className="settings-card-header">
+                    <div className="settings-icon-wrapper">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="settings-card-title">Profile Information</h3>
+                      <p className="settings-card-subtitle">Update your account's profile information and email address.</p>
+                    </div>
                   </div>
-                  <div className="video-meta">
-                    <div className="meta-item">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                      {video.views}
+                  <form onSubmit={handleUpdateProfile} className="settings-form">
+                    <div className="settings-field">
+                      <label htmlFor="settings-name" className="settings-label">Full Name</label>
+                      <input 
+                        id="settings-name"
+                        type="text" 
+                        className="settings-input" 
+                        placeholder="Enter your full name" 
+                        value={settingsName} 
+                        onChange={e => setSettingsName(e.target.value)} 
+                        required 
+                      />
                     </div>
-                    <div className="meta-item">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                      {video.date}
+                    <div className="settings-field">
+                      <label htmlFor="settings-email" className="settings-label">Email Address</label>
+                      <input 
+                        id="settings-email"
+                        type="email" 
+                        className="settings-input" 
+                        placeholder="Enter your email address" 
+                        value={settingsEmail} 
+                        onChange={e => setSettingsEmail(e.target.value)} 
+                        required 
+                      />
                     </div>
+                    <div className="settings-actions">
+                      <button type="submit" className="btn-settings-save" disabled={isUpdatingSettings}>
+                        {isUpdatingSettings ? (
+                          <>
+                            <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <line x1="12" y1="2" x2="12" y2="6"></line>
+                              <line x1="12" y1="18" x2="12" y2="22"></line>
+                              <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                              <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                              <line x1="2" y1="12" x2="6" y2="12"></line>
+                              <line x1="18" y1="12" x2="22" y2="12"></line>
+                              <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                              <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                            </svg>
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                              <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg>
+                            Save Changes
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Workspace Section */}
+                <div className="settings-glass-card">
+                  <div className="settings-card-header">
+                    <div className="settings-icon-wrapper settings-icon-purple">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="settings-card-title">Workspace</h3>
+                      <p className="settings-card-subtitle">Manage your workspace name displayed on your dashboard.</p>
+                    </div>
+                  </div>
+                  <form onSubmit={handleUpdateTenant} className="settings-form">
+                    <div className="settings-field">
+                      <label htmlFor="settings-tenant" className="settings-label">Workspace Name</label>
+                      <input 
+                        id="settings-tenant"
+                        type="text" 
+                        className="settings-input" 
+                        placeholder="Enter workspace name" 
+                        value={settingsTenant} 
+                        onChange={e => setSettingsTenant(e.target.value)} 
+                        required 
+                      />
+                    </div>
+                    <div className="settings-actions">
+                      <button type="submit" className="btn-settings-save" disabled={isUpdatingSettings}>
+                        {isUpdatingSettings ? (
+                          <>
+                            <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <line x1="12" y1="2" x2="12" y2="6"></line>
+                              <line x1="12" y1="18" x2="12" y2="22"></line>
+                              <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                              <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                              <line x1="2" y1="12" x2="6" y2="12"></line>
+                              <line x1="18" y1="12" x2="22" y2="12"></line>
+                              <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                              <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                            </svg>
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                              <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg>
+                            Save Workspace
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Security Section */}
+                <div className="settings-glass-card">
+                  <div className="settings-card-header">
+                    <div className="settings-icon-wrapper settings-icon-amber">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="settings-card-title">Security</h3>
+                      <p className="settings-card-subtitle">Ensure your account is using a long, random password to stay secure.</p>
+                    </div>
+                  </div>
+                  <form onSubmit={handleUpdatePassword} className="settings-form">
+                    <div className="settings-field">
+                      <label htmlFor="settings-current-password" className="settings-label">Current Password</label>
+                      <input 
+                        id="settings-current-password"
+                        type="password" 
+                        className="settings-input" 
+                        placeholder="Enter current password" 
+                        value={settingsCurrentPassword} 
+                        onChange={e => setSettingsCurrentPassword(e.target.value)} 
+                        required 
+                      />
+                    </div>
+                    <div className="settings-field">
+                      <label htmlFor="settings-new-password" className="settings-label">New Password</label>
+                      <input 
+                        id="settings-new-password"
+                        type="password" 
+                        className="settings-input" 
+                        placeholder="Enter new password (min. 8 characters)" 
+                        value={settingsNewPassword} 
+                        onChange={e => setSettingsNewPassword(e.target.value)} 
+                        required 
+                        minLength={8}
+                      />
+                    </div>
+                    <div className="settings-actions">
+                      <button type="submit" className="btn-settings-save btn-settings-save-amber" disabled={isUpdatingSettings}>
+                        {isUpdatingSettings ? (
+                          <>
+                            <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <line x1="12" y1="2" x2="12" y2="6"></line>
+                              <line x1="12" y1="18" x2="12" y2="22"></line>
+                              <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                              <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                              <line x1="2" y1="12" x2="6" y2="12"></line>
+                              <line x1="18" y1="12" x2="22" y2="12"></line>
+                              <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                              <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                            </svg>
+                            Updating...
+                          </>
+                        ) : (
+                          <>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                            </svg>
+                            Update Password
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Danger Zone */}
+                <div className="settings-glass-card settings-card-danger">
+                  <div className="settings-card-header">
+                    <div className="settings-icon-wrapper settings-icon-red">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="settings-card-title">Danger Zone</h3>
+                      <p className="settings-card-subtitle">Irreversible actions. Please proceed with caution.</p>
+                    </div>
+                  </div>
+                  <div className="settings-danger-content">
+                    <p>Once you delete your account, there is no going back. Please be certain.</p>
+                    <button className="btn-settings-danger" type="button">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                      Delete Account
+                    </button>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       </main>
 
       {/* Edit Modal */}
       {editingVideo && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(8px)', display:'flex', justifyContent:'center', alignItems:'center', zIndex:50 }}>
+        <div role="dialog" aria-modal="true" aria-label="Edit Video" style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(8px)', display:'flex', justifyContent:'center', alignItems:'center', zIndex:50 }}>
           <div className="auth-card animate-fade-in" style={{ width: '100%', maxWidth: '440px', padding: '40px' }}>
             <h2 style={{ fontSize:'24px', fontWeight: 700, marginBottom: '24px' }}>Edit Video</h2>
             <div className="input-group">
@@ -461,7 +861,7 @@ function App() {
 
       {/* Upload Modal */}
       {isUploadOpen && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(8px)', display:'flex', justifyContent:'center', alignItems:'center', zIndex:50 }}>
+        <div role="dialog" aria-modal="true" aria-label="Upload Video" style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(8px)', display:'flex', justifyContent:'center', alignItems:'center', zIndex:50 }}>
           <div className="auth-card animate-fade-in" style={{ width: '100%', maxWidth: '520px', padding: '40px' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems: 'center', marginBottom:'32px' }}>
               <h2 style={{ fontSize:'24px', fontWeight: 700 }}>Upload Video</h2>
