@@ -5,7 +5,8 @@ import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, Loader2, R
 interface VideoPlayerProps {
   videoId: string;
   token: string | null;
-  onClose: () => void;
+  onClose?: () => void;
+  isEmbed?: boolean;
 }
 
 const formatTime = (time: number) => {
@@ -15,7 +16,7 @@ const formatTime = (time: number) => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEmbed = false }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -232,21 +233,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose }) =>
     setIsQualityMenuOpen(false);
   };
 
-  return (
-    <div className="player-modal-overlay" onClick={onClose}>
-      <div className="player-modal-content" onClick={e => e.stopPropagation()}>
-        <button className="player-close-btn" onClick={onClose}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+  const playerContent = (
         <div 
           className="video-container" 
           ref={playerContainerRef}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
-          style={{ position: 'relative', overflow: 'hidden', backgroundColor: '#000', borderRadius: isFullscreen ? '0' : '12px' }}
+          style={{ position: 'relative', overflow: 'hidden', backgroundColor: '#000', borderRadius: isFullscreen || isEmbed ? '0' : '12px', width: isEmbed ? '100vw' : undefined, height: isEmbed ? '100vh' : undefined }}
         >
           {isBuffering && (
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5 }}>
@@ -364,6 +357,22 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose }) =>
             </div>
           </div>
         </div>
+  );
+
+  if (isEmbed) {
+    return playerContent;
+  }
+
+  return (
+    <div className="player-modal-overlay" onClick={onClose}>
+      <div className="player-modal-content" onClick={e => e.stopPropagation()}>
+        <button className="player-close-btn" onClick={onClose}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+        {playerContent}
       </div>
     </div>
   );

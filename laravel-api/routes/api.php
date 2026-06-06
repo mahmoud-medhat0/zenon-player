@@ -10,14 +10,15 @@ use App\Http\Controllers\VideoController;
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 
+Route::get('/videos/{id}/thumbnail', [VideoController::class, 'thumbnail']);
+Route::get('/videos/{id}/stream/{file}', [VideoController::class, 'stream'])->where('file', '.*');
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
 
     Route::get('/videos', [VideoController::class, 'index']);
     Route::put('/videos/{id}', [VideoController::class, 'update']);
     Route::delete('/videos/{id}', [VideoController::class, 'destroy']);
-    Route::get('/videos/{id}/thumbnail', [VideoController::class, 'thumbnail']);
-    Route::get('/videos/{id}/stream/{file}', [VideoController::class, 'stream'])->where('file', '.*');
 
     Route::post('/videos/upload-intent', [VideoUploadController::class, 'initiate']);
     Route::post('/videos/{id}/chunks', [VideoUploadController::class, 'uploadChunk']);
