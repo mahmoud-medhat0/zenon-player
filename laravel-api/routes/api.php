@@ -22,7 +22,7 @@ Route::get('/public/videos/{id}', [VideoController::class, 'publicShow']);
 Route::get('/videos/{id}/thumbnail', [VideoController::class, 'thumbnail']);
 Route::get('/videos/{id}/stream/{file}', [VideoController::class, 'stream'])->where('file', '.*');
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:web')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
 
     Route::get('/videos', [VideoController::class, 'index']);
@@ -61,7 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('admin')->prefix('admin')->group(function () {
         // Users
         Route::get('/users', [AdminController::class, 'indexUsers']);
-        Route::post('/users', [AdminController::class, 'storeUser'])->middleware('feature:team_management');
+        Route::post('/users', [AdminController::class, 'storeUser']);
         Route::get('/users/{id}', [AdminController::class, 'showUser']);
         Route::put('/users/{id}', [AdminController::class, 'updateUser']);
 

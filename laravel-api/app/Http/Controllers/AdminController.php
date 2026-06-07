@@ -11,6 +11,7 @@ use App\Services\PlanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
 class AdminController extends Controller
@@ -65,11 +66,16 @@ class AdminController extends Controller
 
     public function storeUser(Request $request): JsonResponse
     {
+        $allowedRoles = ['owner', 'admin'];
+        if ($request->user()?->isSuperAdmin()) {
+            $allowedRoles[] = 'super_admin';
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|min:8|confirmed',
-            'role' => 'required|in:owner,admin',
+            'role' => ['required', Rule::in($allowedRoles)],
             'tenant_id' => 'required|exists:tenants,id',
         ]);
 
@@ -107,13 +113,23 @@ class AdminController extends Controller
     public function updateUser(Request $request, string $id): JsonResponse
     {
         $user = User::findOrFail($id);
+        $allowedRoles = ['owner', 'admin'];
+        if ($request->user()?->isSuperAdmin()) {
+            $allowedRoles[] = 'super_admin';
+        }
 
         $request->validate([
             'name' => 'sometimes|string|max:255',
             'email' => 'sometimes|email|unique:users,email,' . $id,
-            'role' => 'sometimes|in:owner,admin,super_admin',
+            'role' => ['sometimes', Rule::in($allowedRoles)],
             'is_active' => 'sometimes|boolean',
         ]);
+
+        if ($user->isSuperAdmin() && !$request->user()?->isSuperAdmin()) {
+            return response()->json([
+                'message' => 'Only super admins can update another super admin.',
+            ], 403);
+        }
 
         $oldData = $user->only(['name', 'email', 'role', 'is_active']);
 

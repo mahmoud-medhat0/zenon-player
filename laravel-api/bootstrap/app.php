@@ -22,12 +22,24 @@ return Application::configure(basePath: dirname(__DIR__))
             'feature' => EnsurePlanFeature::class,
         ]);
 
+        $middleware->web(append: [
+            \App\Http\Middleware\HandleInertiaRequests::class,
+        ]);
+
         $middleware->api(prepend: [
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn (Request $request) => !$request->header('X-Inertia') && ($request->is('api/*') || $request->wantsJson() || $request->ajax()),
         );
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, Request $request) {
+            if ($request->header('X-Inertia')) {
+                return null; // Let Laravel/Inertia handle the redirect
+            }
+            if ($request->is('api/*') || $request->wantsJson() || $request->ajax()) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+        });
     })->create();

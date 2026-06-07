@@ -23,6 +23,7 @@ class VideoController extends Controller
                 'status' => $video->status,
                 'views' => $video->views,
                 'date' => $video->created_at->diffForHumans(),
+                'created_at' => $video->created_at->toISOString(),
                 'duration' => $video->duration_seconds ? gmdate($video->duration_seconds >= 3600 ? "H:i:s" : "i:s", $video->duration_seconds) : '--:--',
                 'thumbnail' => $video->status === 'ready' 
                     ? url("/api/videos/{$video->id}/thumbnail")
