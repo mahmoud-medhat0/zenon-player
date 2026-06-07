@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Video;
 use App\Models\VideoVersion;
+use App\Services\PlanService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -32,7 +33,7 @@ class ProcessVideo implements ShouldQueue
     public function handle(): void
     {
         Log::info("Starting video processing for Video ID: {$this->video->id}");
-        
+
         $basePath = "videos/{$this->video->tenant_id}";
         $sourceFile = "{$basePath}/{$this->video->id}.mp4";
         $videoFolder = "{$basePath}/{$this->video->id}_data";
@@ -50,6 +51,19 @@ class ProcessVideo implements ShouldQueue
 
             $inspector = FFMpeg::fromDisk('local')->open($sourceFile);
             $height = $inspector->getVideoStream()->getDimensions()->getHeight();
+            $durationInSeconds = (int) $inspector->getDurationInSeconds();
+
+            $tenant = $this->video->tenant()->with('plan')->first();
+
+            if ($tenant && !$this->isDurationAllowed($tenant, $durationInSeconds)) {
+                $maxMinutes = floor($tenant->getMaxVideoLengthSec() / 60);
+                $this->video->update([
+                    'status' => 'failed',
+                    'duration_seconds' => $durationInSeconds,
+                ]);
+                Log::warning("Video exceeds plan duration limit for Video ID: {$this->video->id}. Max: {$maxMinutes} minutes");
+                return;
+            }
 
             $hlsExporter = FFMpeg::fromDisk('local')
                 ->open($sourceFile)
@@ -64,15 +78,17 @@ class ProcessVideo implements ShouldQueue
                 ['height' => 1080, 'bitrate' => 4000, 'width' => 1920, 'label' => '1080p'],
                 ['height' => 1440, 'bitrate' => 8000, 'width' => 2560, 'label' => '1440p'],
                 ['height' => 2160, 'bitrate' => 16000, 'width' => 3840, 'label' => '2160p'],
-                ['height' => 4320, 'bitrate' => 40000, 'width' => 7680, 'label' => '4320p']
+                ['height' => 4320, 'bitrate' => 40000, 'width' => 7680, 'label' => '4320p'],
             ];
+
+            $allowedQualities = $this->getAllowedQualities($tenant, $qualities, $height);
 
             $addedFormat = false;
             $transcodedQualities = [];
-            foreach ($qualities as $q) {
+            foreach ($allowedQualities as $q) {
                 if ($height >= $q['height'] * 0.9) {
                     $format = (new X264('aac'))->setKiloBitrate($q['bitrate']);
-                    $hlsExporter->addFormat($format, function($m) use ($q) {
+                    $hlsExporter->addFormat($format, function ($m) use ($q) {
                         $m->scale($q['width'], $q['height']);
                     });
                     $addedFormat = true;
@@ -89,7 +105,7 @@ class ProcessVideo implements ShouldQueue
             $hlsExporter->toDisk('local')->save($hlsPath);
 
             VideoVersion::where('video_id', $this->video->id)->delete();
-            
+
             foreach ($transcodedQualities as $q) {
                 VideoVersion::create([
                     'video_id' => $this->video->id,
@@ -99,20 +115,42 @@ class ProcessVideo implements ShouldQueue
                 ]);
             }
 
-            $durationInSeconds = FFMpeg::fromDisk('local')->open($sourceFile)->getDurationInSeconds();
-            
             $this->video->update([
                 'status' => 'ready',
                 'duration_seconds' => $durationInSeconds,
             ]);
-            
+
             Log::info("Video processing completed successfully for Video ID: {$this->video->id}");
-            
+
         } catch (Throwable $e) {
             Log::error("Video processing failed: " . $e->getMessage());
             $this->video->update(['status' => 'failed']);
             throw $e;
         }
+    }
+
+    private function isDurationAllowed($tenant, int $durationSeconds): bool
+    {
+        $maxDuration = $tenant->getMaxVideoLengthSec();
+        return $durationSeconds <= $maxDuration;
+    }
+
+    private function getAllowedQualities($tenant, array $qualities, int $sourceHeight): array
+    {
+        if (!$tenant || !$tenant->plan) {
+            return array_filter($qualities, fn($q) => $q['height'] <= 480);
+        }
+
+        $features = $tenant->plan->features ?? [];
+
+        $maxHeight = 480;
+        if (in_array('4k_streaming', $features)) {
+            $maxHeight = 2160;
+        } elseif (in_array('hd_streaming', $features)) {
+            $maxHeight = 1080;
+        }
+
+        return array_filter($qualities, fn($q) => $q['height'] <= $maxHeight);
     }
 
     public function failed(?Throwable $exception): void

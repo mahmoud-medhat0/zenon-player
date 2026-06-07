@@ -7,6 +7,7 @@ interface VideoPlayerProps {
   token: string | null;
   onClose?: () => void;
   isEmbed?: boolean;
+  primaryColor?: string;
 }
 
 const formatTime = (time: number) => {
@@ -16,7 +17,7 @@ const formatTime = (time: number) => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEmbed = false }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEmbed = false, primaryColor }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -239,7 +240,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEm
           ref={playerContainerRef}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
-          style={{ position: 'relative', overflow: 'hidden', backgroundColor: '#000', borderRadius: isFullscreen || isEmbed ? '0' : '12px', width: isEmbed ? '100vw' : undefined, height: isEmbed ? '100vh' : undefined }}
+          style={{ position: 'relative', overflow: 'hidden', backgroundColor: '#000', borderRadius: isFullscreen || isEmbed ? '0' : '12px', width: isEmbed ? '100vw' : undefined, height: isEmbed ? '100vh' : undefined, '--primary': primaryColor || '#4f46e5' } as React.CSSProperties}
         >
           {isBuffering && (
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5 }}>

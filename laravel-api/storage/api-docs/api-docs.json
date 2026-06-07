@@ -1,0 +1,175 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Stream Video Platform Mobile API",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8000",
+            "description": "API Server"
+        }
+    ],
+    "paths": {
+        "/public/videos/{id}": {
+            "get": {
+                "tags": [
+                    "Mobile App Integration"
+                ],
+                "summary": "Get public video metadata and tenant branding",
+                "operationId": "1766754acbad53e24473e67d29efe1dc",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "UUID of the video",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "duration": {
+                                            "type": "integer",
+                                            "nullable": true
+                                        },
+                                        "views": {
+                                            "type": "integer"
+                                        },
+                                        "privacy": {
+                                            "type": "string"
+                                        },
+                                        "thumbnail_url": {
+                                            "type": "string"
+                                        },
+                                        "stream_url": {
+                                            "type": "string"
+                                        },
+                                        "branding": {
+                                            "properties": {
+                                                "primary_color": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "logo_url": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    }
+                }
+            }
+        },
+        "/videos/{id}/thumbnail": {
+            "get": {
+                "tags": [
+                    "Mobile App Integration"
+                ],
+                "summary": "Get video thumbnail",
+                "operationId": "a64c8a328597c62341627b2025be24ce",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "UUID of the video",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Image binary data"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    }
+                }
+            }
+        },
+        "/videos/{id}/stream/{file}": {
+            "get": {
+                "tags": [
+                    "Mobile App Integration"
+                ],
+                "summary": "Stream video file (HLS)",
+                "operationId": "ea85c4bec25f22cd3b8096ea8ca25f39",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "UUID of the video",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "file",
+                        "in": "path",
+                        "description": "Filename (e.g. playlist.m3u8)",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "HLS Manifest or TS Chunk"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "scheme": "bearer"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Mobile App Integration",
+            "description": "Mobile App Integration"
+        }
+    ]
+}

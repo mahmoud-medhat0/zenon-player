@@ -49,13 +49,29 @@ class SettingsController extends Controller
     {
         $tenant = $request->user()->tenant;
         
-        $request->validate([
+        $rules = [
             'name' => 'required|string',
-        ]);
+        ];
 
-        $tenant->update([
-            'name' => $request->name
-        ]);
+        if ($tenant->hasFeature('custom_branding')) {
+            $rules['primary_color'] = 'sometimes|string';
+            $rules['logo_url'] = 'sometimes|nullable|url';
+        }
+
+        $validated = $request->validate($rules);
+
+        $updateData = ['name' => $request->name];
+
+        if ($tenant->hasFeature('custom_branding')) {
+            if ($request->has('primary_color')) {
+                $updateData['primary_color'] = $request->primary_color;
+            }
+            if ($request->has('logo_url')) {
+                $updateData['logo_url'] = $request->logo_url;
+            }
+        }
+
+        $tenant->update($updateData);
 
         return response()->json(['message' => 'Workspace updated successfully', 'tenant' => $tenant]);
     }

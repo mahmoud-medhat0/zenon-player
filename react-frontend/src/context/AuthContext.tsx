@@ -6,9 +6,21 @@ interface User {
   name: string;
   email: string;
   role: string;
+  is_active: boolean;
   tenant: {
     id: string;
     name: string;
+    plan_tier: string;
+    is_active: boolean;
+    plan?: {
+      id: string;
+      name: string;
+      slug: string;
+      max_users: number;
+      max_storage_gb: number;
+      features: string[];
+      is_active: boolean;
+    };
   };
 }
 
@@ -18,6 +30,9 @@ interface AuthContextType {
   login: (data: any) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => void;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
+  hasFeature: (key: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -32,7 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (token) {
         try {
           const res = await api.get('/me');
-          setUser(res.data);
+          setUser(res.data.user);
         } catch (error) {
           localStorage.removeItem('auth_token');
         }
@@ -59,8 +74,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isSuperAdmin = user?.role === 'super_admin';
+
+  const hasFeature = (key: string) => {
+    if (!user || !user.tenant || !user.tenant.plan) return false;
+    if (!user.tenant.plan.is_active || !user.tenant.is_active) return false;
+    return user.tenant.plan.features?.includes(key) || false;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, isAdmin, isSuperAdmin, hasFeature }}>
       {children}
     </AuthContext.Provider>
   );
