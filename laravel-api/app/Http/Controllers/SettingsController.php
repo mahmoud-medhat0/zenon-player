@@ -51,6 +51,8 @@ class SettingsController extends Controller
         
         $rules = [
             'name' => 'required|string',
+            'allowed_domains' => 'sometimes|array',
+            'allowed_domains.*' => 'string|url',
         ];
 
         if ($tenant->hasFeature('custom_branding')) {
@@ -61,6 +63,13 @@ class SettingsController extends Controller
         $validated = $request->validate($rules);
 
         $updateData = ['name' => $request->name];
+
+        if ($request->has('allowed_domains')) {
+            // Ensure no trailing slashes for consistency in CORS
+            $updateData['allowed_domains'] = array_map(function ($domain) {
+                return rtrim($domain, '/');
+            }, $request->allowed_domains);
+        }
 
         if ($tenant->hasFeature('custom_branding')) {
             if ($request->has('primary_color')) {

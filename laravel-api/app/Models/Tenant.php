@@ -17,13 +17,26 @@ class Tenant extends Model
         'is_active',
         'primary_color',
         'logo_url',
+        'allowed_domains',
     ];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'allowed_domains' => 'array',
         ];
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::saved(function ($tenant) {
+            if ($tenant->isDirty('allowed_domains')) {
+                \Illuminate\Support\Facades\Cache::forget('cors_allowed_domains');
+            }
+        });
     }
 
     public function users()

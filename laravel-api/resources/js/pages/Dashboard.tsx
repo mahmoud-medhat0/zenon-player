@@ -65,6 +65,7 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
   const [settingsName, setSettingsName] = useState('');
   const [settingsEmail, setSettingsEmail] = useState('');
   const [settingsTenant, setSettingsTenant] = useState('');
+  const [settingsAllowedDomains, setSettingsAllowedDomains] = useState('');
   const [settingsCurrentPassword, setSettingsCurrentPassword] = useState('');
   const [settingsNewPassword, setSettingsNewPassword] = useState('');
   const [settingsPrimaryColor, setSettingsPrimaryColor] = useState('#4f46e5');
@@ -139,6 +140,8 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
       setSettingsTenant(user.tenant?.name || '');
       setSettingsPrimaryColor((user.tenant as any)?.primary_color || '#4f46e5');
       setSettingsLogoUrl((user.tenant as any)?.logo_url || '');
+      const domains = (user.tenant as any)?.allowed_domains || [];
+      setSettingsAllowedDomains(Array.isArray(domains) ? domains.join('\n') : '');
     }
   }, [user]);
 
@@ -391,7 +394,10 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
   const handleUpdateTenant = async (e: FormEvent) => {
     e.preventDefault();
     setIsUpdatingSettings(true);
-    const payload: any = { name: settingsTenant };
+    const payload: any = { 
+      name: settingsTenant,
+      allowed_domains: settingsAllowedDomains.split('\n').map(d => d.trim()).filter(d => d !== '')
+    };
     if (hasFeature('custom_branding')) {
       payload.primary_color = settingsPrimaryColor;
       payload.logo_url = settingsLogoUrl;
@@ -871,6 +877,19 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
                         onChange={e => setSettingsTenant(e.target.value)}
                         required
                       />
+                    </div>
+                    <div className="settings-field">
+                      <label htmlFor="settings-domains" className="settings-label">{t('dashboard.settings.workspace.allowedDomains', 'Allowed Domains (CORS)')}</label>
+                      <textarea
+                        id="settings-domains"
+                        className="settings-input"
+                        placeholder="https://your-academy.com&#10;http://localhost:3000"
+                        value={settingsAllowedDomains}
+                        onChange={e => setSettingsAllowedDomains(e.target.value)}
+                        rows={3}
+                        style={{ resize: 'vertical', fontFamily: 'monospace' }}
+                      />
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>Enter one domain per line. Examples: https://example.com, http://localhost:3000</p>
                     </div>
                     {hasFeature('custom_branding') && (
                       <>
