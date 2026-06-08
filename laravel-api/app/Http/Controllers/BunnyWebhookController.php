@@ -29,8 +29,8 @@ class BunnyWebhookController extends Controller
             return response()->json(['message' => 'Video not found'], 404);
         }
 
-        // Bunny Stream Statuses: 4 = Finished processing
-        if ($status == 4) {
+        // Bunny Stream Statuses: 3 = Finished, 4 = Resolution finished
+        if ($status == 3 || $status == 4) {
             // Fetch video duration from Bunny API
             $libraryId = config('video.bunny.library_id');
             $apiKey = config('video.bunny.api_key');

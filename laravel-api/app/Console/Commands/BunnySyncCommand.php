@@ -56,7 +56,7 @@ class BunnySyncCommand extends Command
                 if ($response->successful()) {
                     $status = $response->json('status');
                     
-                    if ($status == 4) { // Finished
+                    if ($status == 3 || $status == 4) { // Finished
                         $length = $response->json('length');
                         $video->update([
                             'status' => 'ready',
