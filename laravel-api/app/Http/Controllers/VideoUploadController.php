@@ -54,23 +54,38 @@ class VideoUploadController extends Controller
                 return response()->json(['message' => 'Cloudflare credentials not configured'], 500);
             }
 
-            $response = \Illuminate\Support\Facades\Http::withToken($apiToken)
-                ->post("https://api.cloudflare.com/client/v4/accounts/{$accountId}/stream/direct_upload", [
-                    'maxDurationSeconds' => 3600 * 4,
-                    'creator' => (string) $user->id,
+            // Force Guzzle to use StreamHandler instead of CurlHandler to bypass the old cURL extension on the server
+            $handler = new \GuzzleHttp\Handler\StreamHandler();
+            $stack = \GuzzleHttp\HandlerStack::create($handler);
+            $client = new \GuzzleHttp\Client(['handler' => $stack]);
+
+            try {
+                $response = $client->post("https://api.cloudflare.com/client/v4/accounts/{$accountId}/stream/direct_upload", [
+                    'headers' => [
+                        'Authorization' => "Bearer {$apiToken}",
+                        'Accept' => 'application/json',
+                    ],
+                    'json' => [
+                        'maxDurationSeconds' => 3600 * 4,
+                        'creator' => (string) $user->id,
+                    ],
                 ]);
 
-            if ($response->successful()) {
+                $data = json_decode($response->getBody()->getContents(), true);
+
                 return response()->json([
                     'type' => 'cloudflare',
                     'video_id' => $video->id,
-                    'upload_url' => $response->json('result.uploadURL'),
-                    'cloudflare_uid' => $response->json('result.uid'),
+                    'upload_url' => $data['result']['uploadURL'],
+                    'cloudflare_uid' => $data['result']['uid'],
                     'message' => 'Cloudflare direct upload initiated',
                 ]);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'message' => 'Failed to generate Cloudflare upload URL',
+                    'error' => $e->getMessage()
+                ], 500);
             }
-
-            return response()->json(['message' => 'Failed to generate Cloudflare upload URL', 'error' => $response->json()], 500);
         }
 
         $uploadId = Str::random(40);
