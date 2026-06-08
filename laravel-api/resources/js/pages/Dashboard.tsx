@@ -201,28 +201,49 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
 
     try {
       const intentRes = await axios.post('/api/videos/upload-intent', { title: uploadFile.name, file_size: uploadFile.size });
-      const { video_id, upload_id } = intentRes.data;
-
-      const CHUNK_SIZE = 5 * 1024 * 1024;
-      const totalChunks = Math.ceil(uploadFile.size / CHUNK_SIZE);
-
-      for (let i = 0; i < totalChunks; i++) {
-        setUploadStatus(t('dashboard.upload.chunkStatus', { current: i + 1, total: totalChunks }));
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(uploadFile.size, start + CHUNK_SIZE);
-        const chunk = uploadFile.slice(start, end, uploadFile.type || 'video/mp4');
-
+      
+      if (intentRes.data.type === 'cloudflare') {
+        const { video_id, upload_url, cloudflare_uid } = intentRes.data;
+        setUploadStatus('Uploading to Cloudflare Stream...');
+        
         const formData = new FormData();
-        formData.append('chunk', chunk, uploadFile.name);
-        formData.append('chunk_index', i.toString());
-        formData.append('upload_id', upload_id);
+        formData.append('file', uploadFile);
+        
+        await axios.post(upload_url, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || uploadFile.size));
+            setUploadProgress(percentCompleted);
+            setUploadStatus(`Uploading: ${percentCompleted}%`);
+          }
+        });
 
-        await axios.post(`/api/videos/${video_id}/chunks`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-        setUploadProgress(Math.round(((i + 1) / totalChunks) * 100));
+        setUploadStatus(t('dashboard.upload.finalizing'));
+        await axios.post(`/api/videos/${video_id}/cloudflare-confirm`, { cloudflare_uid });
+      } else {
+        const { video_id, upload_id } = intentRes.data;
+
+        const CHUNK_SIZE = 5 * 1024 * 1024;
+        const totalChunks = Math.ceil(uploadFile.size / CHUNK_SIZE);
+
+        for (let i = 0; i < totalChunks; i++) {
+          setUploadStatus(t('dashboard.upload.chunkStatus', { current: i + 1, total: totalChunks }));
+          const start = i * CHUNK_SIZE;
+          const end = Math.min(uploadFile.size, start + CHUNK_SIZE);
+          const chunk = uploadFile.slice(start, end, uploadFile.type || 'video/mp4');
+
+          const formData = new FormData();
+          formData.append('chunk', chunk, uploadFile.name);
+          formData.append('chunk_index', i.toString());
+          formData.append('upload_id', upload_id);
+
+          await axios.post(`/api/videos/${video_id}/chunks`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+          setUploadProgress(Math.round(((i + 1) / totalChunks) * 100));
+        }
+
+        setUploadStatus(t('dashboard.upload.finalizing'));
+        await axios.post(`/api/videos/${video_id}/confirm`, { upload_id, total_chunks: totalChunks });
       }
-
-      setUploadStatus(t('dashboard.upload.finalizing'));
-      await axios.post(`/api/videos/${video_id}/confirm`, { upload_id, total_chunks: totalChunks });
 
       setUploadStatus(t('dashboard.upload.complete'));
       showSuccess('Video uploaded successfully');

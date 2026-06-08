@@ -1,0 +1,1 @@
+import{t as e}from"./app-9REPd6l2.js";import t from"./Dashboard-CYi5xPwT.js";var n=e();function r(){return(0,n.jsx)(t,{initialTab:`settings`})}export{r as default};

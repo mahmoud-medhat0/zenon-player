@@ -44,9 +44,39 @@ class VideoUploadController extends Controller
             'size_bytes' => $request->file_size,
         ]);
 
+        $processor = config('video.processor');
+
+        if ($processor === 'cloudflare') {
+            $accountId = config('video.cloudflare.account_id');
+            $apiToken = config('video.cloudflare.api_token');
+
+            if (!$accountId || !$apiToken) {
+                return response()->json(['message' => 'Cloudflare credentials not configured'], 500);
+            }
+
+            $response = \Illuminate\Support\Facades\Http::withToken($apiToken)
+                ->post("https://api.cloudflare.com/client/v4/accounts/{$accountId}/stream/direct_upload", [
+                    'maxDurationSeconds' => 3600 * 4,
+                    'creator' => (string) $user->id,
+                ]);
+
+            if ($response->successful()) {
+                return response()->json([
+                    'type' => 'cloudflare',
+                    'video_id' => $video->id,
+                    'upload_url' => $response->json('result.uploadURL'),
+                    'cloudflare_uid' => $response->json('result.uid'),
+                    'message' => 'Cloudflare direct upload initiated',
+                ]);
+            }
+
+            return response()->json(['message' => 'Failed to generate Cloudflare upload URL', 'error' => $response->json()], 500);
+        }
+
         $uploadId = Str::random(40);
 
         return response()->json([
+            'type' => 'local',
             'video_id' => $video->id,
             'upload_id' => $uploadId,
             'message' => 'Upload initiated successfully',
@@ -122,6 +152,25 @@ class VideoUploadController extends Controller
 
         return response()->json([
             'message' => 'Upload confirmed and processing started',
+            'video' => $video,
+        ]);
+    }
+
+    public function cloudflareConfirm(Request $request, $id): JsonResponse
+    {
+        $video = Video::findOrFail($id);
+        
+        $request->validate([
+            'cloudflare_uid' => 'required|string',
+        ]);
+
+        $video->update([
+            'status' => 'processing',
+            'cloudflare_uid' => $request->cloudflare_uid,
+        ]);
+
+        return response()->json([
+            'message' => 'Cloudflare upload confirmed and video is processing',
             'video' => $video,
         ]);
     }

@@ -1,1 +1,0 @@
-import{t as e}from"./app-D58Ko9TC.js";import t from"./Dashboard-CqJ5WXtv.js";var n=e();function r(){return(0,n.jsx)(t,{initialTab:`team`})}export{r as default};

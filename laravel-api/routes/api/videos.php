@@ -14,4 +14,5 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/videos/upload-intent', [VideoUploadController::class, 'initiate'])->middleware('feature:basic_upload');
     Route::post('/videos/{id}/chunks', [VideoUploadController::class, 'uploadChunk'])->middleware('feature:basic_upload');
     Route::post('/videos/{id}/confirm', [VideoUploadController::class, 'confirm'])->middleware('feature:basic_upload');
+    Route::post('/videos/{id}/cloudflare-confirm', [VideoUploadController::class, 'cloudflareConfirm'])->middleware('feature:basic_upload');
 });
