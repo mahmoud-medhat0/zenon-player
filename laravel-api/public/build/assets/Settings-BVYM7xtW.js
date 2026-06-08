@@ -1,1 +1,0 @@
-import{t as e}from"./app-DEACyyb5.js";import t from"./Dashboard-CAV66DS-.js";var n=e();function r(){return(0,n.jsx)(t,{initialTab:`settings`})}export{r as default};

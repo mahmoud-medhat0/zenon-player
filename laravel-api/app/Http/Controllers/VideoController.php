@@ -79,7 +79,17 @@ class VideoController extends Controller
             $video = $video->fresh('tenant') ?? $video;
         }
 
-        if ($video->privacy === 'private' && !auth('sanctum')->check()) {
+        $tokenParam = request('token');
+        $hasValidToken = false;
+        
+        if ($tokenParam && $video->privacy === 'private') {
+            $expectedToken = \Illuminate\Support\Facades\Cache::get("video_token_{$video->id}");
+            if ($expectedToken && hash_equals($expectedToken, $tokenParam)) {
+                $hasValidToken = true;
+            }
+        }
+
+        if ($video->privacy === 'private' && !auth('sanctum')->check() && !$hasValidToken) {
             abort(403, 'This video is private.');
         }
 
@@ -101,6 +111,13 @@ class VideoController extends Controller
         } elseif ($video->status === 'ready') {
             $thumbnailUrl = url("/api/videos/{$video->id}/thumbnail");
             $streamUrl = url("/api/videos/{$video->id}/stream/playlist.m3u8");
+        }
+
+        if ($thumbnailUrl && $hasValidToken) {
+            $thumbnailUrl .= (str_contains($thumbnailUrl, '?') ? '&' : '?') . "token={$tokenParam}";
+        }
+        if ($streamUrl && $hasValidToken) {
+            $streamUrl .= (str_contains($streamUrl, '?') ? '&' : '?') . "token={$tokenParam}";
         }
 
         return response()->json([
@@ -128,7 +145,17 @@ class VideoController extends Controller
     {
         $video = Video::findOrFail($id);
 
-        if ($video->privacy === 'private' && !auth('sanctum')->check()) {
+        $tokenParam = request('token');
+        $hasValidToken = false;
+        
+        if ($tokenParam && $video->privacy === 'private') {
+            $expectedToken = \Illuminate\Support\Facades\Cache::get("video_token_{$video->id}");
+            if ($expectedToken && hash_equals($expectedToken, $tokenParam)) {
+                $hasValidToken = true;
+            }
+        }
+
+        if ($video->privacy === 'private' && !auth('sanctum')->check() && !$hasValidToken) {
             abort(403, 'This video is private.');
         }
 
@@ -252,7 +279,17 @@ class VideoController extends Controller
     {
         $video = Video::findOrFail($id);
         
-        if ($video->privacy === 'private' && !auth('sanctum')->check()) {
+        $tokenParam = request('token');
+        $hasValidToken = false;
+        
+        if ($tokenParam && $video->privacy === 'private') {
+            $expectedToken = \Illuminate\Support\Facades\Cache::get("video_token_{$video->id}");
+            if ($expectedToken && hash_equals($expectedToken, $tokenParam)) {
+                $hasValidToken = true;
+            }
+        }
+
+        if ($video->privacy === 'private' && !auth('sanctum')->check() && !$hasValidToken) {
             abort(403, 'This video is private.');
         }
 
@@ -329,5 +366,24 @@ class VideoController extends Controller
         $token = str_replace('=', '', $token);
 
         return "https://{$domain}/{$videoId}/playlist.m3u8?token={$token}&expires={$expires}";
+    }
+
+    /**
+     * Generate a one-time access token for a private video
+     */
+    public function generateToken(Request $request, $id)
+    {
+        $video = Video::findOrFail($id);
+
+        // Generate a random 32 character token
+        $token = bin2hex(random_bytes(16));
+
+        // Store token in cache for 6 hours
+        \Illuminate\Support\Facades\Cache::put("video_token_{$video->id}", $token, now()->addHours(6));
+
+        return response()->json([
+            'token' => $token,
+            'expires_at' => now()->addHours(6)->toISOString(),
+        ]);
     }
 }

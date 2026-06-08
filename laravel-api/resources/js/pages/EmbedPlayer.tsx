@@ -46,7 +46,10 @@ export default function EmbedPlayer({ videoId }: Props) {
       };
     }
 
-    axios.get<EmbedVideo>(`/api/public/videos/${videoId}`)
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    axios.get<EmbedVideo>(`/api/public/videos/${videoId}${token ? `?token=${token}` : ''}`)
       .then(({ data }) => {
         if (cancelled) return;
 

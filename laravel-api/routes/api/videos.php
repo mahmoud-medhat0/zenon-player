@@ -10,6 +10,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/videos/{id}', [VideoController::class, 'destroy']);
 
     Route::post('/videos/{id}/thumbnail', [VideoController::class, 'uploadThumbnail'])->middleware('feature:custom_thumbnail');
+    Route::post('/videos/{id}/token', [VideoController::class, 'generateToken']);
 
     Route::post('/videos/upload-intent', [VideoUploadController::class, 'initiate'])->middleware('feature:basic_upload');
     Route::post('/videos/{id}/chunks', [VideoUploadController::class, 'uploadChunk'])->middleware('feature:basic_upload');
