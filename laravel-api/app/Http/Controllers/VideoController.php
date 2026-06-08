@@ -17,6 +17,13 @@ class VideoController extends Controller
         $videos = Video::latest()->paginate(20);
         
         $videos->getCollection()->transform(function($video) {
+            $thumbnail = null;
+            if ($video->cloudflare_uid) {
+                $thumbnail = "https://videodelivery.net/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
+            } elseif ($video->status === 'ready') {
+                $thumbnail = url("/api/videos/{$video->id}/thumbnail");
+            }
+
             return [
                 'id' => $video->id,
                 'title' => $video->title,
@@ -25,9 +32,7 @@ class VideoController extends Controller
                 'date' => $video->created_at->diffForHumans(),
                 'created_at' => $video->created_at->toISOString(),
                 'duration' => $video->duration_seconds ? gmdate($video->duration_seconds >= 3600 ? "H:i:s" : "i:s", $video->duration_seconds) : '--:--',
-                'thumbnail' => $video->status === 'ready' 
-                    ? url("/api/videos/{$video->id}/thumbnail")
-                    : null,
+                'thumbnail' => $thumbnail,
             ];
         });
 
@@ -61,6 +66,14 @@ class VideoController extends Controller
             abort(403, 'This video is private.');
         }
 
+        $thumbnailUrl = url("/api/videos/{$video->id}/thumbnail");
+        $streamUrl = url("/api/videos/{$video->id}/stream/playlist.m3u8");
+
+        if ($video->cloudflare_uid) {
+            $thumbnailUrl = "https://videodelivery.net/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
+            $streamUrl = "https://videodelivery.net/{$video->cloudflare_uid}/manifest/video.m3u8";
+        }
+
         return response()->json([
             'id' => $video->id,
             'title' => $video->title,
@@ -68,8 +81,8 @@ class VideoController extends Controller
             'views' => $video->views,
             'privacy' => $video->privacy,
             'status' => $video->status,
-            'thumbnail_url' => url("/api/videos/{$video->id}/thumbnail"),
-            'stream_url' => url("/api/videos/{$video->id}/stream/playlist.m3u8"),
+            'thumbnail_url' => $thumbnailUrl,
+            'stream_url' => $streamUrl,
             'branding' => [
                 'primary_color' => $video->tenant->primary_color,
                 'logo_url' => $video->tenant->logo_url,
@@ -88,6 +101,10 @@ class VideoController extends Controller
 
         if ($video->privacy === 'private' && !auth('sanctum')->check()) {
             abort(403, 'This video is private.');
+        }
+
+        if ($video->cloudflare_uid) {
+            return redirect("https://videodelivery.net/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg");
         }
 
         $path = "videos/{$video->tenant_id}/{$video->id}_data/thumbnail.jpg";
@@ -159,6 +176,15 @@ class VideoController extends Controller
     {
         $video = Video::findOrFail($id);
 
+        if ($video->cloudflare_uid) {
+            $accountId = config('video.cloudflare.account_id');
+            $apiToken = config('video.cloudflare.api_token');
+            if ($accountId && $apiToken) {
+                \Illuminate\Support\Facades\Http::withToken($apiToken)
+                    ->delete("https://api.cloudflare.com/client/v4/accounts/{$accountId}/stream/{$video->cloudflare_uid}");
+            }
+        }
+
         Storage::disk('local')->deleteDirectory("videos/{$video->tenant_id}/{$video->id}_data");
         Storage::disk('local')->delete("videos/{$video->tenant_id}/{$video->id}.mp4");
 
@@ -179,6 +205,10 @@ class VideoController extends Controller
         
         if ($video->privacy === 'private' && !auth('sanctum')->check()) {
             abort(403, 'This video is private.');
+        }
+
+        if ($video->cloudflare_uid && basename($file) === 'playlist.m3u8') {
+            return redirect("https://videodelivery.net/{$video->cloudflare_uid}/manifest/video.m3u8");
         }
 
         $file = basename($file);
