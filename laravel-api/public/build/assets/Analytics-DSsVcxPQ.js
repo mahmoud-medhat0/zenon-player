@@ -1,1 +1,0 @@
-import{t as e}from"./app-BlOW-HJI.js";import t from"./Dashboard-DPlAB-7x.js";var n=e();function r(){return(0,n.jsx)(t,{initialTab:`analytics`})}export{r as default};
