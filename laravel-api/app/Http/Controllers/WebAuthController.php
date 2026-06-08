@@ -37,6 +37,7 @@ class WebAuthController extends Controller
 
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
+        $request->session()->save();
         $user->update(['last_login_at' => now()]);
 
         if ($this->expectsJsonResponse($request)) {
@@ -74,6 +75,7 @@ class WebAuthController extends Controller
 
         Auth::login($user);
         $request->session()->regenerate();
+        $request->session()->save();
 
         if ($this->expectsJsonResponse($request)) {
             return response()->json(['message' => 'Registered successfully']);
