@@ -46,8 +46,10 @@ class SendTenantWebhook implements ShouldQueue
             'timestamp' => now()->toIso8601String(),
         ];
 
+        Log::info("Preparing to send Tenant Webhook for Video: {$this->video->id} to URL: {$tenant->webhook_url}");
+
         try {
-            $request = Http::timeout(10);
+            $request = Http::timeout(10)->withOptions(['verify' => false]);
             
             if ($tenant->webhook_secret) {
                 $request->withHeaders([
@@ -55,10 +57,13 @@ class SendTenantWebhook implements ShouldQueue
                 ]);
             }
 
+            Log::info("Sending Tenant Webhook payload:", $payload);
             $response = $request->post($tenant->webhook_url, $payload);
 
             if (!$response->successful()) {
-                Log::warning("Tenant Webhook Failed for Tenant {$tenant->id}: " . $response->body());
+                Log::warning("Tenant Webhook Failed for Tenant {$tenant->id}. Status: " . $response->status() . " Body: " . $response->body());
+            } else {
+                Log::info("Tenant Webhook Success for Tenant {$tenant->id}. Body: " . $response->body());
             }
         } catch (\Exception $e) {
             Log::error("Tenant Webhook Exception for Tenant {$tenant->id}: " . $e->getMessage());

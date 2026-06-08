@@ -17,6 +17,11 @@ class TenantResource extends JsonResource
             'plan' => new PlanResource($this->whenLoaded('plan')),
             'users_count' => $this->whenCounted('users'),
             'videos_count' => $this->whenCounted('videos'),
+            'allowed_domains' => $this->allowed_domains,
+            'webhook_url' => $this->webhook_url,
+            'webhook_secret' => $this->webhook_secret,
+            'primary_color' => $this->primary_color,
+            'logo_url' => $this->logo_url,
             'created_at' => $this->created_at->toISOString(),
         ];
     }

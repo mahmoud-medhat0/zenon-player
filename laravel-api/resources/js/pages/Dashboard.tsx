@@ -400,20 +400,14 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
     setIsUpdatingSettings(true);
     const payload: any = { 
       name: settingsTenant,
-      allowed_domains: settingsAllowedDomains.split('\n').map(d => d.trim()).filter(d => d !== '')
+      allowed_domains: settingsAllowedDomains.split('\n').map(d => d.trim()).filter(d => d !== ''),
+      webhook_url: settingsWebhookUrl || null,
+      webhook_secret: settingsWebhookSecret || null,
     };
     
-    if (settingsWebhookUrl) {
-      payload.webhook_url = settingsWebhookUrl;
-    }
-    
-    if (settingsWebhookSecret) {
-      payload.webhook_secret = settingsWebhookSecret;
-    }
-
     if (hasFeature('custom_branding')) {
-      payload.primary_color = settingsPrimaryColor;
-      payload.logo_url = settingsLogoUrl;
+      payload.primary_color = settingsPrimaryColor || null;
+      payload.logo_url = settingsLogoUrl || null;
     }
     try {
       await axios.put('/api/settings/tenant', payload);
