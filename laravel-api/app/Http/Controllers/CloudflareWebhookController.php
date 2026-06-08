@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Video;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use App\Jobs\SendTenantWebhook;
 
 class CloudflareWebhookController extends Controller
 {
@@ -68,6 +69,7 @@ class CloudflareWebhookController extends Controller
 
             $video->update($updateData);
             Log::info('Video marked as ready from Cloudflare: ' . $video->id);
+            SendTenantWebhook::dispatch($video, 'video.ready');
         }
 
         return response()->json(['message' => 'Webhook processed']);

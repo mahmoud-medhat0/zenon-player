@@ -18,6 +18,8 @@ class Tenant extends Model
         'primary_color',
         'logo_url',
         'allowed_domains',
+        'webhook_url',
+        'webhook_secret',
     ];
 
     protected function casts(): array

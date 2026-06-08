@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Video;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
+use App\Jobs\SendTenantWebhook;
 
 class BunnyWebhookController extends Controller
 {
@@ -29,14 +31,37 @@ class BunnyWebhookController extends Controller
 
         // Bunny Stream Statuses: 4 = Finished processing
         if ($status == 4) {
-            $video->update([
-                'status' => 'ready',
-            ]);
+            // Fetch video duration from Bunny API
+            $libraryId = config('video.bunny.library_id');
+            $apiKey = config('video.bunny.api_key');
+            
+            try {
+                $response = Http::withHeaders([
+                    'AccessKey' => $apiKey,
+                    'accept' => 'application/json'
+                ])->get("https://video.bunnycdn.com/library/{$libraryId}/videos/{$videoId}");
+                
+                if ($response->successful()) {
+                    $length = $response->json('length');
+                    if ($length) {
+                        $video->duration_seconds = round($length);
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error('Failed to fetch duration from Bunny: ' . $e->getMessage());
+            }
+
+            $video->status = 'ready';
+            $video->save();
+
             Log::info('Video marked as ready from Bunny: ' . $video->id);
+            SendTenantWebhook::dispatch($video, 'video.ready');
+
         } elseif ($status == 5 || $status == 6) { // 5 = Failed, 6 = Upload failed
             $video->update([
                 'status' => 'failed',
             ]);
+            SendTenantWebhook::dispatch($video, 'video.failed');
         }
 
         return response()->json(['message' => 'Webhook processed']);

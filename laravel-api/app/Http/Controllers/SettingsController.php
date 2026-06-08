@@ -53,6 +53,8 @@ class SettingsController extends Controller
             'name' => 'required|string',
             'allowed_domains' => 'sometimes|array',
             'allowed_domains.*' => 'string|url',
+            'webhook_url' => 'sometimes|nullable|url',
+            'webhook_secret' => 'sometimes|nullable|string',
         ];
 
         if ($tenant->hasFeature('custom_branding')) {
@@ -69,6 +71,14 @@ class SettingsController extends Controller
             $updateData['allowed_domains'] = array_map(function ($domain) {
                 return rtrim($domain, '/');
             }, $request->allowed_domains);
+        }
+
+        if ($request->has('webhook_url')) {
+            $updateData['webhook_url'] = $request->webhook_url;
+        }
+
+        if ($request->has('webhook_secret')) {
+            $updateData['webhook_secret'] = $request->webhook_secret;
         }
 
         if ($tenant->hasFeature('custom_branding')) {

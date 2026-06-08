@@ -66,6 +66,8 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
   const [settingsEmail, setSettingsEmail] = useState('');
   const [settingsTenant, setSettingsTenant] = useState('');
   const [settingsAllowedDomains, setSettingsAllowedDomains] = useState('');
+  const [settingsWebhookUrl, setSettingsWebhookUrl] = useState('');
+  const [settingsWebhookSecret, setSettingsWebhookSecret] = useState('');
   const [settingsCurrentPassword, setSettingsCurrentPassword] = useState('');
   const [settingsNewPassword, setSettingsNewPassword] = useState('');
   const [settingsPrimaryColor, setSettingsPrimaryColor] = useState('#4f46e5');
@@ -138,6 +140,8 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
       setSettingsName(user.name || '');
       setSettingsEmail(user.email || '');
       setSettingsTenant(user.tenant?.name || '');
+      setSettingsWebhookUrl((user.tenant as any)?.webhook_url || '');
+      setSettingsWebhookSecret((user.tenant as any)?.webhook_secret || '');
       setSettingsPrimaryColor((user.tenant as any)?.primary_color || '#4f46e5');
       setSettingsLogoUrl((user.tenant as any)?.logo_url || '');
       const domains = (user.tenant as any)?.allowed_domains || [];
@@ -398,6 +402,15 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
       name: settingsTenant,
       allowed_domains: settingsAllowedDomains.split('\n').map(d => d.trim()).filter(d => d !== '')
     };
+    
+    if (settingsWebhookUrl) {
+      payload.webhook_url = settingsWebhookUrl;
+    }
+    
+    if (settingsWebhookSecret) {
+      payload.webhook_secret = settingsWebhookSecret;
+    }
+
     if (hasFeature('custom_branding')) {
       payload.primary_color = settingsPrimaryColor;
       payload.logo_url = settingsLogoUrl;
@@ -890,6 +903,29 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
                         style={{ resize: 'vertical', fontFamily: 'monospace' }}
                       />
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>Enter one domain per line. Examples: https://example.com, http://localhost:3000</p>
+                    </div>
+                    <div className="settings-field">
+                      <label htmlFor="settings-webhook-url" className="settings-label">Webhook URL</label>
+                      <input
+                        id="settings-webhook-url"
+                        type="url"
+                        className="settings-input"
+                        placeholder="https://your-academy.com/api/zenon-webhook"
+                        value={settingsWebhookUrl}
+                        onChange={e => setSettingsWebhookUrl(e.target.value)}
+                      />
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>We will send POST requests here when a video finishes processing.</p>
+                    </div>
+                    <div className="settings-field">
+                      <label htmlFor="settings-webhook-secret" className="settings-label">Webhook Secret (Optional)</label>
+                      <input
+                        id="settings-webhook-secret"
+                        type="text"
+                        className="settings-input"
+                        placeholder="e.g. random-secret-key"
+                        value={settingsWebhookSecret}
+                        onChange={e => setSettingsWebhookSecret(e.target.value)}
+                      />
                     </div>
                     {hasFeature('custom_branding') && (
                       <>
