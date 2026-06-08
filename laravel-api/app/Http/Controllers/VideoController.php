@@ -16,11 +16,45 @@ class VideoController extends Controller
     {
         $videos = Video::latest()->paginate(20);
         
+        // Real-time Bunny Stream Sync (Lazy check on dashboard load/poll)
+        $bunnyLibraryId = config('video.bunny.library_id');
+        $bunnyApiKey = config('video.bunny.api_key');
+        if ($bunnyLibraryId && $bunnyApiKey) {
+            foreach ($videos as $video) {
+                if ($video->status === 'processing' && $video->bunny_video_id) {
+                    try {
+                        $response = \Illuminate\Support\Facades\Http::withHeaders([
+                            'AccessKey' => $bunnyApiKey,
+                            'Accept' => 'application/json',
+                        ])->get("https://video.bunnycdn.com/library/{$bunnyLibraryId}/videos/{$video->bunny_video_id}");
+
+                        if ($response->successful()) {
+                            $status = $response->json('status');
+                            if ($status == 4) { // Finished
+                                $length = $response->json('length');
+                                $video->update([
+                                    'status' => 'ready',
+                                    'duration_seconds' => $length ? round($length) : null,
+                                ]);
+                            } elseif ($status == 5 || $status == 6) { // Failed
+                                $video->update(['status' => 'failed']);
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        // Silently ignore to avoid breaking the dashboard
+                    }
+                }
+            }
+        }
+
         $videos->getCollection()->transform(function($video) {
             $thumbnail = null;
             if ($video->cloudflare_uid) {
                 $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
                 $thumbnail = "https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
+            } elseif ($video->bunny_video_id) {
+                $bunnyDomain = config('video.bunny.pull_zone');
+                $thumbnail = "https://{$bunnyDomain}/{$video->bunny_video_id}/thumbnail.jpg";
             } elseif ($video->status === 'ready') {
                 $thumbnail = url("/api/videos/{$video->id}/thumbnail");
             }
@@ -77,7 +111,7 @@ class VideoController extends Controller
         } elseif ($video->bunny_video_id) {
             $bunnyDomain = config('video.bunny.pull_zone');
             $thumbnailUrl = "https://{$bunnyDomain}/{$video->bunny_video_id}/thumbnail.jpg";
-            $streamUrl = "https://{$bunnyDomain}/{$video->bunny_video_id}/playlist.m3u8";
+            $streamUrl = $this->getBunnyStreamUrl($video->bunny_video_id, $bunnyDomain);
         }
 
         return response()->json([
@@ -281,5 +315,30 @@ class VideoController extends Controller
             'Pragma' => 'no-cache',
             'Expires' => '0',
         ]);
+    }
+
+    /**
+     * Generate a securely signed Bunny Stream URL
+     */
+    protected function getBunnyStreamUrl($videoId, $domain)
+    {
+        $securityKey = config('video.bunny.security_key');
+        
+        if (!$securityKey) {
+            return "https://{$domain}/{$videoId}/playlist.m3u8";
+        }
+
+        $expires = time() + 7200; // 2 hours expiration
+        $path = "/{$videoId}/playlist.m3u8";
+
+        // Hashable string: SecurityKey + Path + Expires
+        $hashableBase = $securityKey . $path . $expires;
+        
+        $hash = hash('sha256', $hashableBase, true);
+        
+        $token = strtr(base64_encode($hash), '+/', '-_');
+        $token = str_replace('=', '', $token);
+
+        return "https://{$domain}/{$videoId}/playlist.m3u8?token={$token}&expires={$expires}";
     }
 }
