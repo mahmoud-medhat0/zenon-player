@@ -49,7 +49,11 @@
       "team": "الفريق",
       "settings": "الإعدادات",
       "administration": "الإدارة",
-      "adminPanel": "لوحة الإدارة"
+      "adminPanel": "لوحة الإدارة",
+      "adminOverview": "نظرة الإدارة",
+      "adminUsers": "المستخدمون",
+      "adminTenants": "المؤسسات",
+      "adminPlans": "الخطط"
     },
     "header": {
       "searchPlaceholder": "البحث في مكتبتك...",
@@ -272,7 +276,22 @@
       "details": "التفاصيل",
       "close": "إغلاق",
       "userList": "المستخدمون في مساحة العمل:",
-      "noUsers": "لا يوجد مستخدمون في مساحة العمل."
+      "noUsers": "لا يوجد مستخدمون في مساحة العمل.",
+      "loadFailed": "فشل تحميل المستأجرين",
+      "detailFailed": "فشل تحميل تفاصيل المستأجر",
+      "planAssignedWarnings": "تم تعيين الخطة مع تحذيرات: {{warnings}}",
+      "planAssignedSuccess": "تم تعيين الخطة بنجاح",
+      "planAssignFailed": "فشل تعيين الخطة",
+      "changePlan": "تغيير الخطة",
+      "pagination": "صفحة {{page}} من {{pages}} ({{total}} مستأجر)",
+      "videos": "الفيديوهات",
+      "email": "البريد الإلكتروني",
+      "role": "الدور",
+      "changePlanFor": "تغيير خطة - {{name}}",
+      "selectPlan": "اختر الخطة",
+      "choosePlan": "اختر خطة...",
+      "assigningPlan": "جاري التعيين...",
+      "assignPlan": "تعيين الخطة"
     },
     "plans": {
       "title": "الخطط",
@@ -309,7 +328,32 @@
       "deletedSuccess": "تم حذف الخطة",
       "failed": "فشلت العملية",
       "loadFailed": "فشل تحميل الخطط",
-      "detailFailed": "فشل تحميل تفاصيل الخطة"
+      "detailFailed": "فشل تحميل تفاصيل الخطة",
+      "month": "شهر",
+      "year": "سنة",
+      "hoursShort": "س",
+      "minutesShort": "د",
+      "secondsShort": "ث",
+      "gb": "جيجابايت",
+      "categories": {
+        "Core": "الأساسية",
+        "Streaming": "البث",
+        "Features": "الميزات",
+        "Advanced": "المتقدمة"
+      },
+      "featuresList": {
+        "basic_upload": "رفع أساسي",
+        "sd_streaming": "بث SD",
+        "hd_streaming": "بث HD (1080p)",
+        "4k_streaming": "بث 4K (2160p)",
+        "analytics": "التحليلات",
+        "custom_thumbnail": "صور مصغرة مخصصة",
+        "privacy_controls": "ضوابط الخصوصية",
+        "team_management": "إدارة الفريق",
+        "api_access": "وصول API",
+        "priority_support": "دعم ذو أولوية",
+        "custom_branding": "علامة تجارية مخصصة"
+      }
     },
     "layout": {
       "adminPanel": "لوحة الإدارة",

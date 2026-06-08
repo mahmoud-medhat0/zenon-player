@@ -26,8 +26,10 @@
         "lucide-react": "^1.17.0",
         "puppeteer": "^25.1.0",
         "react": "^19.2.7",
+        "react-colorful": "^5.7.0",
         "react-dom": "^19.2.7",
         "react-i18next": "^17.0.8",
+        "react-select": "^5.10.2",
         "sweetalert2": "^11.26.25"
     }
 }

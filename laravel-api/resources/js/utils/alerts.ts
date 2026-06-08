@@ -1,12 +1,13 @@
 import Swal from 'sweetalert2';
+import i18n from '../i18n';
 
 const MySwal = Swal.mixin({
-  background: '#121214',
+  background: '#1a1a1f', // Match the modal background (rgba(255,255,255,0.03) or slightly dark)
   color: '#f8fafc',
   customClass: {
     popup: 'glass-panel',
-    confirmButton: 'btn-primary',
-    cancelButton: 'btn-cancel'
+    confirmButton: 'swal-btn-primary',
+    cancelButton: 'swal-btn-cancel'
   },
   buttonsStyling: false
 });
@@ -43,13 +44,12 @@ export const confirmDelete = async (title: string, text: string): Promise<boolea
     text,
     icon: 'warning',
     showCancelButton: true,
-    confirmButtonText: 'Yes, delete it',
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: '#ef4444',
+    confirmButtonText: i18n.t('common.delete', { defaultValue: 'Yes, delete it' }),
+    cancelButtonText: i18n.t('common.cancel', { defaultValue: 'Cancel' }),
     customClass: {
       popup: 'glass-panel',
-      confirmButton: 'btn-primary',
-      cancelButton: 'btn-cancel'
+      confirmButton: 'swal-btn-danger',
+      cancelButton: 'swal-btn-cancel'
     }
   });
 

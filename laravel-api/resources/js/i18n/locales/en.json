@@ -49,7 +49,11 @@
       "team": "Team",
       "settings": "Settings",
       "administration": "Administration",
-      "adminPanel": "Admin Panel"
+      "adminPanel": "Admin Panel",
+      "adminOverview": "Admin Overview",
+      "adminUsers": "Users",
+      "adminTenants": "Organizations",
+      "adminPlans": "Plans"
     },
     "header": {
       "searchPlaceholder": "Search your library...",
@@ -272,7 +276,22 @@
       "details": "Details",
       "close": "Close",
       "userList": "Users in this workspace:",
-      "noUsers": "No users in this workspace."
+      "noUsers": "No users in this workspace.",
+      "loadFailed": "Failed to load tenants",
+      "detailFailed": "Failed to load tenant details",
+      "planAssignedWarnings": "Plan assigned with warnings: {{warnings}}",
+      "planAssignedSuccess": "Plan assigned successfully",
+      "planAssignFailed": "Failed to assign plan",
+      "changePlan": "Change Plan",
+      "pagination": "Page {{page}} of {{pages}} ({{total}} tenants)",
+      "videos": "Videos",
+      "email": "Email",
+      "role": "Role",
+      "changePlanFor": "Change Plan - {{name}}",
+      "selectPlan": "Select Plan",
+      "choosePlan": "Choose a plan...",
+      "assigningPlan": "Assigning...",
+      "assignPlan": "Assign Plan"
     },
     "plans": {
       "title": "Plans",
@@ -309,7 +328,32 @@
       "deletedSuccess": "Plan deleted",
       "failed": "Operation failed",
       "loadFailed": "Failed to load plans",
-      "detailFailed": "Failed to load plan details"
+      "detailFailed": "Failed to load plan details",
+      "month": "month",
+      "year": "year",
+      "hoursShort": "h",
+      "minutesShort": "m",
+      "secondsShort": "s",
+      "gb": "GB",
+      "categories": {
+        "Core": "Core",
+        "Streaming": "Streaming",
+        "Features": "Features",
+        "Advanced": "Advanced"
+      },
+      "featuresList": {
+        "basic_upload": "Basic Upload",
+        "sd_streaming": "SD Streaming",
+        "hd_streaming": "HD Streaming (1080p)",
+        "4k_streaming": "4K Streaming (2160p)",
+        "analytics": "Analytics",
+        "custom_thumbnail": "Custom Thumbnails",
+        "privacy_controls": "Privacy Controls",
+        "team_management": "Team Management",
+        "api_access": "API Access",
+        "priority_support": "Priority Support",
+        "custom_branding": "Custom Branding"
+      }
     },
     "layout": {
       "adminPanel": "Admin Panel",

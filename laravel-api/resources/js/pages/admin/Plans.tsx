@@ -3,6 +3,7 @@ import { usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 import { PageProps } from '../../types';
 import AdminLayout from '../../components/admin/AdminLayout';
+import AdminModal from '../../components/admin/AdminModal';
 import axios from 'axios';
 import { showSuccess, showError, confirmDelete } from '../../utils/alerts';
 import { Plus, Pencil, Trash2, X, Check, Users, HardDrive, Clock } from 'lucide-react';
@@ -103,7 +104,7 @@ export default function PlansPage() {
 
   const viewDetail = async (plan: Plan) => {
     try {
-      const res = await axios.get(`/admin/plans/${plan.id}`);
+      const res = await axios.get(`/api/admin/plans/${plan.id}`);
       setDetailPlan(res.data.plan);
       setShowDetail(true);
     } catch (err) {
@@ -151,9 +152,9 @@ export default function PlansPage() {
   };
 
   const formatDuration = (seconds: number) => {
-    if (seconds >= 3600) return `${seconds / 3600}h`;
-    if (seconds >= 60) return `${seconds / 60}m`;
-    return `${seconds}s`;
+    if (seconds >= 3600) return `${seconds / 3600}${t('admin.plans.hoursShort', { defaultValue: 'h' })}`;
+    if (seconds >= 60) return `${seconds / 60}${t('admin.plans.minutesShort', { defaultValue: 'm' })}`;
+    return `${seconds}${t('admin.plans.secondsShort', { defaultValue: 's' })}`;
   };
 
   if (loading) {
@@ -177,14 +178,14 @@ export default function PlansPage() {
       <div className="admin-plans-grid">
         {plans.map((plan) => (
           <div key={plan.id} className={`admin-plan-card ${!plan.is_active ? 'inactive' : ''}`}>
-            {!plan.is_active && <div className="admin-plan-inactive-badge">Inactive</div>}
+            {!plan.is_active && <div className="admin-plan-inactive-badge">{t('common.inactive')}</div>}
             <div className="admin-plan-header">
               <h3 className="admin-plan-name">{plan.name}</h3>
               <div className="admin-plan-price">
                 <span className="admin-plan-amount"></span>
-                <span className="admin-plan-period">/month</span>
+                <span className="admin-plan-period">/{t('admin.plans.month')}</span>
               </div>
-              {plan.price_yearly > 0 && <span className="admin-plan-yearly">/year</span>}
+              {plan.price_yearly > 0 && <span className="admin-plan-yearly">/{t('admin.plans.year')}</span>}
             </div>
             <div className="admin-plan-limits">
               <div className="admin-plan-limit"><Users size={16} /><span>{plan.max_users} {t('admin.plans.users')}</span></div>
@@ -195,7 +196,7 @@ export default function PlansPage() {
               {ALL_FEATURES.map((f) => (
                 <div key={f.key} className="admin-plan-feature">
                   {plan.features.includes(f.key) ? <Check size={14} className="feature-check" /> : <X size={14} className="feature-x" />}
-                  <span>{f.label}</span>
+                  <span>{t(`admin.plans.featuresList.${f.key}`, { defaultValue: f.label })}</span>
                 </div>
               ))}
             </div>
@@ -203,7 +204,7 @@ export default function PlansPage() {
               <button className="admin-btn admin-btn-sm" onClick={() => viewDetail(plan)}>{t('admin.plans.details')}</button>
               {isSuperAdmin && (
                 <>
-                  <button className="admin-btn admin-btn-sm" onClick={() => openEdit(plan)}><Pencil size={14} /> Edit</button>
+                  <button className="admin-btn admin-btn-sm" onClick={() => openEdit(plan)}><Pencil size={14} /> {t('common.edit')}</button>
                   <button className="admin-btn admin-btn-sm admin-btn-danger-sm" onClick={() => handleDelete(plan)}><Trash2 size={14} /></button>
                 </>
               )}
@@ -213,108 +214,99 @@ export default function PlansPage() {
       </div>
 
       {showModal && (
-        <div className="admin-modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="admin-modal admin-modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <h2>{editingPlan ? t('admin.plans.editPlan') : t('admin.plans.createPlan')}</h2>
-              <button className="admin-modal-close" onClick={() => setShowModal(false)}><X size={20} /></button>
+        <AdminModal
+          title={editingPlan ? t('admin.plans.editPlan') : t('admin.plans.createPlan')}
+          onClose={() => setShowModal(false)}
+          size="lg"
+          formProps={{ onSubmit: handleSubmit }}
+          footer={
+            <>
+              <button type="button" className="admin-btn admin-btn-ghost" onClick={() => setShowModal(false)}>{t('common.cancel')}</button>
+              <button type="submit" className="admin-btn admin-btn-primary" disabled={submitting}>
+                {submitting ? t('common.saving') : editingPlan ? t('admin.plans.editPlan') : t('admin.plans.createPlan')}
+              </button>
+            </>
+          }
+        >
+          <div className="admin-form-row">
+            <div className="admin-form-group">
+              <label>{t('admin.plans.planName')}</label>
+              <input type="text" className="admin-form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('admin.plans.planNamePlaceholder')} required />
             </div>
-            <form onSubmit={handleSubmit} className="admin-modal-body">
-              <div className="admin-form-row">
-                <div className="admin-form-group">
-                  <label>{t('admin.plans.planName')}</label>
-                  <input type="text" className="admin-form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('admin.plans.planNamePlaceholder')} required />
-                </div>
-                <div className="admin-form-group">
-                  <label>{t('admin.plans.slug')}</label>
-                  <input type="text" className="admin-form-input" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })} placeholder={t('admin.plans.slugPlaceholder')} required disabled={!!editingPlan} />
-                </div>
-              </div>
-              <div className="admin-form-row">
-                <div className="admin-form-group">
-                  <label>{t('admin.plans.priceMonthly')}</label>
-                  <input type="number" className="admin-form-input" value={form.price_monthly} onChange={(e) => setForm({ ...form, price_monthly: parseFloat(e.target.value) || 0 })} min="0" step="0.01" required />
-                </div>
-                <div className="admin-form-group">
-                  <label>{t('admin.plans.priceYearly')}</label>
-                  <input type="number" className="admin-form-input" value={form.price_yearly} onChange={(e) => setForm({ ...form, price_yearly: parseFloat(e.target.value) || 0 })} min="0" step="0.01" required />
-                </div>
-              </div>
-              <div className="admin-form-row-3">
-                <div className="admin-form-group">
-                  <label>{t('admin.plans.maxUsersLabel')}</label>
-                  <input type="number" className="admin-form-input" value={form.max_users} onChange={(e) => setForm({ ...form, max_users: parseInt(e.target.value) || 1 })} min="1" required />
-                </div>
-                <div className="admin-form-group">
-                  <label>{t('admin.plans.storageGB')}</label>
-                  <input type="number" className="admin-form-input" value={form.max_storage_gb} onChange={(e) => setForm({ ...form, max_storage_gb: parseInt(e.target.value) || 1 })} min="1" required />
-                </div>
-                <div className="admin-form-group">
-                  <label>{t('admin.plans.maxVideoSec')}</label>
-                  <input type="number" className="admin-form-input" value={form.max_video_length_sec} onChange={(e) => setForm({ ...form, max_video_length_sec: parseInt(e.target.value) || 300 })} min="1" required />
-                </div>
-              </div>
-              <div className="admin-form-group">
-                <label className="admin-checkbox-label">
-                  <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
-                  {t('admin.plans.activePlan')}
-                </label>
-              </div>
-              <div className="admin-form-group">
-                <label style={{ marginBottom: '12px', display: 'block' }}>{t('admin.plans.features')}</label>
-                {FEATURE_CATEGORIES.map((cat) => (
-                  <div key={cat} className="admin-feature-category">
-                    <div className="admin-feature-category-label">{cat}</div>
-                    <div className="admin-feature-toggles">
-                      {ALL_FEATURES.filter(f => f.category === cat).map((f) => (
-                        <button key={f.key} type="button" className={`admin-feature-toggle ${form.features.includes(f.key) ? 'active' : ''}`} onClick={() => toggleFeature(f.key)}>
-                          {form.features.includes(f.key) ? <Check size={14} /> : <X size={14} />}
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="admin-modal-footer">
-                <button type="button" className="admin-btn admin-btn-ghost" onClick={() => setShowModal(false)}>{t('common.cancel')}</button>
-                <button type="submit" className="admin-btn admin-btn-primary" disabled={submitting}>
-                  {submitting ? t('common.saving') : editingPlan ? t('admin.plans.editPlan') : t('admin.plans.createPlan')}
-                </button>
-              </div>
-            </form>
+            <div className="admin-form-group">
+              <label>{t('admin.plans.slug')}</label>
+              <input type="text" className="admin-form-input" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })} placeholder={t('admin.plans.slugPlaceholder')} required disabled={!!editingPlan} />
+            </div>
           </div>
-        </div>
+          <div className="admin-form-row">
+            <div className="admin-form-group">
+              <label>{t('admin.plans.priceMonthly')}</label>
+              <input type="number" className="admin-form-input" value={form.price_monthly} onChange={(e) => setForm({ ...form, price_monthly: parseFloat(e.target.value) || 0 })} min="0" step="0.01" required />
+            </div>
+            <div className="admin-form-group">
+              <label>{t('admin.plans.priceYearly')}</label>
+              <input type="number" className="admin-form-input" value={form.price_yearly} onChange={(e) => setForm({ ...form, price_yearly: parseFloat(e.target.value) || 0 })} min="0" step="0.01" required />
+            </div>
+          </div>
+          <div className="admin-form-row-3">
+            <div className="admin-form-group">
+              <label>{t('admin.plans.maxUsersLabel')}</label>
+              <input type="number" className="admin-form-input" value={form.max_users} onChange={(e) => setForm({ ...form, max_users: parseInt(e.target.value) || 1 })} min="1" required />
+            </div>
+            <div className="admin-form-group">
+              <label>{t('admin.plans.storageGB')}</label>
+              <input type="number" className="admin-form-input" value={form.max_storage_gb} onChange={(e) => setForm({ ...form, max_storage_gb: parseInt(e.target.value) || 1 })} min="1" required />
+            </div>
+            <div className="admin-form-group">
+              <label>{t('admin.plans.maxVideoSec')}</label>
+              <input type="number" className="admin-form-input" value={form.max_video_length_sec} onChange={(e) => setForm({ ...form, max_video_length_sec: parseInt(e.target.value) || 300 })} min="1" required />
+            </div>
+          </div>
+          <div className="admin-form-group">
+            <label className="admin-checkbox-label">
+              <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
+              {t('admin.plans.activePlan')}
+            </label>
+          </div>
+          <div className="admin-form-group">
+            <label style={{ marginBottom: '12px', display: 'block' }}>{t('admin.plans.features')}</label>
+            {FEATURE_CATEGORIES.map((cat) => (
+              <div key={cat} className="admin-feature-category">
+                <div className="admin-feature-category-label">{t(`admin.plans.categories.${cat}`, { defaultValue: cat })}</div>
+                <div className="admin-feature-toggles">
+                  {ALL_FEATURES.filter(f => f.category === cat).map((f) => (
+                    <button key={f.key} type="button" className={`admin-feature-toggle ${form.features.includes(f.key) ? 'active' : ''}`} onClick={() => toggleFeature(f.key)}>
+                      {form.features.includes(f.key) ? <Check size={14} /> : <X size={14} />}
+                      {t(`admin.plans.featuresList.${f.key}`, { defaultValue: f.label })}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </AdminModal>
       )}
 
       {showDetail && detailPlan && (
-        <div className="admin-modal-overlay" onClick={() => setShowDetail(false)}>
-          <div className="admin-modal admin-modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <h2>{detailPlan.name} - {t('admin.plans.details')}</h2>
-              <button className="admin-modal-close" onClick={() => setShowDetail(false)}><X size={20} /></button>
-            </div>
-            <div className="admin-modal-body">
-              <div className="admin-detail-grid">
-                <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.monthlyPrice')}</span><span className="admin-detail-value">${detailPlan.price_monthly}</span></div>
-                <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.yearlyPrice')}</span><span className="admin-detail-value">${detailPlan.price_yearly}</span></div>
-                <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.maxUsers')}</span><span className="admin-detail-value">{detailPlan.max_users}</span></div>
-                <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.storageLabel')}</span><span className="admin-detail-value">{detailPlan.max_storage_gb} GB</span></div>
-                <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.maxVideoLabel')}</span><span className="admin-detail-value">{formatDuration(detailPlan.max_video_length_sec)}</span></div>
-                <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.tenants')}</span><span className="admin-detail-value">{detailPlan.tenants_count ?? 0}</span></div>
-              </div>
-              <div className="admin-detail-section">
-                <h3>{t('admin.plans.enabledFeatures')}</h3>
-                <div className="admin-detail-features">
-                  {detailPlan.features.map((f) => {
-                    const feature = ALL_FEATURES.find(af => af.key === f);
-                    return <span key={f} className="admin-badge admin-badge-emerald"><Check size={12} /> {feature?.label || f}</span>;
-                  })}
-                </div>
-              </div>
+        <AdminModal title={`${detailPlan.name} - ${t('admin.plans.details')}`} onClose={() => setShowDetail(false)} size="lg">
+          <div className="admin-detail-grid">
+            <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.monthlyPrice')}</span><span className="admin-detail-value">${detailPlan.price_monthly}</span></div>
+            <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.yearlyPrice')}</span><span className="admin-detail-value">${detailPlan.price_yearly}</span></div>
+            <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.maxUsers')}</span><span className="admin-detail-value">{detailPlan.max_users}</span></div>
+            <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.storageLabel')}</span><span className="admin-detail-value">{detailPlan.max_storage_gb} {t('admin.plans.gb', { defaultValue: 'GB' })}</span></div>
+            <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.maxVideoLabel')}</span><span className="admin-detail-value">{formatDuration(detailPlan.max_video_length_sec)}</span></div>
+            <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.tenants')}</span><span className="admin-detail-value">{detailPlan.tenants_count ?? 0}</span></div>
+          </div>
+          <div className="admin-detail-section">
+            <h3>{t('admin.plans.enabledFeatures')}</h3>
+            <div className="admin-detail-features">
+              {detailPlan.features.map((f) => {
+                const feature = ALL_FEATURES.find(af => af.key === f);
+                return <span key={f} className="admin-badge admin-badge-emerald"><Check size={12} /> {t(`admin.plans.featuresList.${f}`, { defaultValue: feature?.label || f })}</span>;
+              })}
             </div>
           </div>
-        </div>
+        </AdminModal>
       )}
     </div>
   );

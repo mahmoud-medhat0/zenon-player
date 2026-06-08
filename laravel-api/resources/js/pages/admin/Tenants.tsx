@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
+import { usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
+import { PageProps } from '../../types';
 import AdminLayout from '../../components/admin/AdminLayout';
+import AdminModal from '../../components/admin/AdminModal';
+import AdminSelect from '../../components/AdminSelect';
 import axios from 'axios';
 import { showSuccess, showError } from '../../utils/alerts';
-import { Search, Eye, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Search, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -45,6 +49,8 @@ TenantsPage.layout = (page: React.ReactNode) => <AdminLayout>{page}</AdminLayout
 
 export default function TenantsPage() {
   const { t } = useTranslation();
+  const { props } = usePage<PageProps>();
+  const isSuperAdmin = props.auth.user?.role === 'super_admin';
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,7 +80,7 @@ export default function TenantsPage() {
       setTenants(res.data.tenants);
       setPagination(res.data.pagination);
     } catch (err) {
-      showError('Failed to load tenants');
+      showError(t('admin.tenants.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -88,11 +94,13 @@ export default function TenantsPage() {
       setSelectedTenant(res.data.tenant);
       setShowDetail(true);
     } catch (err) {
-      showError('Failed to load tenant details');
+      showError(t('admin.tenants.detailFailed'));
     }
   };
 
   const openPlanModal = async (tenant: Tenant) => {
+    if (!isSuperAdmin) return;
+
     setPlanTenant(tenant);
     setSelectedPlanId(tenant.plan?.id || '');
     try {
@@ -105,20 +113,20 @@ export default function TenantsPage() {
   };
 
   const assignPlan = async () => {
-    if (!planTenant || !selectedPlanId) return;
+    if (!isSuperAdmin || !planTenant || !selectedPlanId) return;
     setAssigning(true);
     try {
       const res = await axios.put(`/api/admin/tenants/${planTenant.id}/plan`, { plan_id: selectedPlanId });
       const warnings = res.data.warnings;
       if (warnings && warnings.length > 0) {
-        showSuccess('Plan assigned with warnings: ' + warnings.join(' '));
+        showSuccess(t('admin.tenants.planAssignedWarnings', { warnings: warnings.join(' ') }));
       } else {
-        showSuccess('Plan assigned successfully');
+        showSuccess(t('admin.tenants.planAssignedSuccess'));
       }
       setShowPlanModal(false);
       fetchTenants();
     } catch (err: any) {
-      showError(err.response?.data?.message || 'Failed to assign plan');
+      showError(err.response?.data?.message || t('admin.tenants.planAssignFailed'));
     } finally {
       setAssigning(false);
     }
@@ -169,7 +177,7 @@ export default function TenantsPage() {
                       <th>{t('admin.tenants.users')}</th>
                       <th>{t('admin.tenants.status')}</th>
                       <th>{t('admin.tenants.created')}</th>
-                      <th style={{ textAlign: 'right' }}>Actions</th>
+                      <th className="admin-actions-heading">{t('admin.users.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -194,7 +202,7 @@ export default function TenantsPage() {
                         <td>{tenant.users_count}</td>
                         <td>
                           <span className={`admin-status-dot ${tenant.is_active ? 'active' : 'inactive'}`} />
-                          {tenant.is_active ? 'Active' : 'Inactive'}
+                          {tenant.is_active ? t('common.active') : t('common.inactive')}
                         </td>
                         <td className="admin-table-date">{new Date(tenant.created_at).toLocaleDateString()}</td>
                         <td>
@@ -202,9 +210,11 @@ export default function TenantsPage() {
                             <button className="admin-action-btn" onClick={() => viewTenant(tenant)} title={t('admin.tenants.details')}>
                               <Eye size={16} />
                             </button>
-                            <button className="admin-btn admin-btn-sm" onClick={() => openPlanModal(tenant)}>
-                              Change Plan
-                            </button>
+                            {isSuperAdmin && (
+                              <button className="admin-btn admin-btn-sm" onClick={() => openPlanModal(tenant)}>
+                                {t('admin.tenants.changePlan')}
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -216,7 +226,7 @@ export default function TenantsPage() {
               {pagination && pagination.last_page > 1 && (
                 <div className="admin-pagination">
                   <span className="admin-pagination-info">
-                    Page {pagination.current_page} of {pagination.last_page} ({pagination.total} tenants)
+                    {t('admin.tenants.pagination', { page: pagination.current_page, pages: pagination.last_page, total: pagination.total })}
                   </span>
                   <div className="admin-pagination-btns">
                     <button
@@ -243,105 +253,88 @@ export default function TenantsPage() {
 
       {/* Tenant Detail Modal */}
       {showDetail && selectedTenant && (
-        <div className="admin-modal-overlay" onClick={() => setShowDetail(false)}>
-          <div className="admin-modal admin-modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <h2>{selectedTenant.name}</h2>
-              <button className="admin-modal-close" onClick={() => setShowDetail(false)}>
-                <X size={20} />
-              </button>
+        <AdminModal title={selectedTenant.name} onClose={() => setShowDetail(false)} size="lg">
+          <div className="admin-detail-grid">
+            <div className="admin-detail-stat">
+              <span className="admin-detail-label">{t('admin.tenants.plan')}</span>
+              <span className="admin-detail-value">{selectedTenant.plan?.name || selectedTenant.plan_tier}</span>
             </div>
-            <div className="admin-modal-body">
-              <div className="admin-detail-grid">
-                <div className="admin-detail-stat">
-                  <span className="admin-detail-label">{t('admin.tenants.plan')}</span>
-                  <span className="admin-detail-value">{selectedTenant.plan?.name || selectedTenant.plan_tier}</span>
-                </div>
-                <div className="admin-detail-stat">
-                  <span className="admin-detail-label">{t('admin.tenants.storage')}</span>
-                  <span className="admin-detail-value">{selectedTenant.storage_used_gb} / {selectedTenant.storage_limit_gb} GB</span>
-                </div>
-                <div className="admin-detail-stat">
-                  <span className="admin-detail-label">{t('admin.tenants.users')}</span>
-                  <span className="admin-detail-value">{selectedTenant.users?.length || 0} / {selectedTenant.plan?.max_users || '-'}</span>
-                </div>
-                <div className="admin-detail-stat">
-                  <span className="admin-detail-label">Videos</span>
-                  <span className="admin-detail-value">{selectedTenant.videos?.length || 0}</span>
-                </div>
-              </div>
-
-              {selectedTenant.users && selectedTenant.users.length > 0 && (
-                <div className="admin-detail-section">
-                  <h3>{t('admin.tenants.userList')}</h3>
-                  <div className="admin-table-wrapper">
-                    <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th>{t('admin.tenants.name')}</th>
-                          <th>Email</th>
-                          <th>Role</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedTenant.users.map((u) => (
-                          <tr key={u.id}>
-                            <td>{u.name}</td>
-                            <td>{u.email}</td>
-                            <td>
-                              <span className={`admin-badge admin-badge-${u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : 'gray'}`}>
-                                {u.role}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+            <div className="admin-detail-stat">
+              <span className="admin-detail-label">{t('admin.tenants.storage')}</span>
+              <span className="admin-detail-value">{selectedTenant.storage_used_gb} / {selectedTenant.storage_limit_gb} GB</span>
+            </div>
+            <div className="admin-detail-stat">
+              <span className="admin-detail-label">{t('admin.tenants.users')}</span>
+              <span className="admin-detail-value">{selectedTenant.users?.length || 0} / {selectedTenant.plan?.max_users || '-'}</span>
+            </div>
+            <div className="admin-detail-stat">
+              <span className="admin-detail-label">{t('admin.tenants.videos')}</span>
+              <span className="admin-detail-value">{selectedTenant.videos?.length || 0}</span>
             </div>
           </div>
-        </div>
+
+          {selectedTenant.users && selectedTenant.users.length > 0 && (
+            <div className="admin-detail-section">
+              <h3>{t('admin.tenants.userList')}</h3>
+              <div className="admin-table-wrapper">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>{t('admin.tenants.name')}</th>
+                      <th>{t('admin.tenants.email')}</th>
+                      <th>{t('admin.tenants.role')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedTenant.users.map((u) => (
+                      <tr key={u.id}>
+                        <td>{u.name}</td>
+                        <td>{u.email}</td>
+                        <td>
+                          <span className={`admin-badge admin-badge-${u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : 'gray'}`}>
+                            {u.role}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </AdminModal>
       )}
 
       {/* Assign Plan Modal */}
       {showPlanModal && planTenant && (
-        <div className="admin-modal-overlay" onClick={() => setShowPlanModal(false)}>
-          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <h2>Change Plan — {planTenant.name}</h2>
-              <button className="admin-modal-close" onClick={() => setShowPlanModal(false)}>
-                <X size={20} />
+        <AdminModal
+          title={t('admin.tenants.changePlanFor', { name: planTenant.name })}
+          onClose={() => setShowPlanModal(false)}
+          footer={
+            <>
+              <button type="button" className="admin-btn admin-btn-ghost" onClick={() => setShowPlanModal(false)}>{t('admin.tenants.close')}</button>
+              <button
+                type="button"
+                className="admin-btn admin-btn-primary"
+                disabled={!selectedPlanId || assigning}
+                onClick={assignPlan}
+              >
+                {assigning ? t('admin.tenants.assigningPlan') : t('admin.tenants.assignPlan')}
               </button>
-            </div>
-            <div className="admin-modal-body">
-              <div className="admin-form-group">
-                <label>Select Plan</label>
-                <select
-                  className="admin-form-select"
-                  value={selectedPlanId}
-                  onChange={(e) => setSelectedPlanId(e.target.value)}
-                >
-                  <option value="">Choose a plan...</option>
-                  {plans.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="admin-modal-footer">
-                <button className="admin-btn admin-btn-ghost" onClick={() => setShowPlanModal(false)}>{t('admin.tenants.close')}</button>
-                <button
-                  className="admin-btn admin-btn-primary"
-                  disabled={!selectedPlanId || assigning}
-                  onClick={assignPlan}
-                >
-                  {assigning ? 'Assigning...' : 'Assign Plan'}
-                </button>
-              </div>
-            </div>
+            </>
+          }
+        >
+          <div className="admin-form-group">
+            <label>{t('admin.tenants.selectPlan')}</label>
+            <AdminSelect
+              value={selectedPlanId ? { value: selectedPlanId, label: plans.find(p => p.id === selectedPlanId)?.name || '' } : null}
+              onChange={(opt: any) => setSelectedPlanId(opt ? opt.value : '')}
+              options={plans.map(p => ({ value: p.id, label: p.name }))}
+              placeholder={t('admin.tenants.choosePlan')}
+              isClearable
+            />
           </div>
-        </div>
+        </AdminModal>
       )}
     </div>
   );

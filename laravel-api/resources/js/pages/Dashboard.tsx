@@ -6,7 +6,15 @@ import { confirmDelete, showSuccess, showError } from '../utils/alerts';
 import VideoPlayer from '../components/VideoPlayer';
 import SecureImage from '../components/SecureImage';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import AdminDashboard from './admin/Dashboard';
+import AdminUsersPage from './admin/Users';
+import AdminTenantsPage from './admin/Tenants';
+import AdminPlansPage from './admin/Plans';
 import { useTranslation } from 'react-i18next';
+import AdminSelect from '../components/AdminSelect';
+import { X } from 'lucide-react';
+import ImagePicker from '../components/ImagePicker';
+import ColorPicker from '../components/ColorPicker';
 
 export default function Dashboard() {
   const { props } = usePage<PageProps>();
@@ -84,6 +92,8 @@ export default function Dashboard() {
     return user.tenant.plan.features?.includes(key) || false;
   };
 
+  const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
+
   const formatRelativeDate = (value?: string, fallback = '') => {
     if (!value) return fallback;
 
@@ -122,6 +132,26 @@ export default function Dashboard() {
     if (flash?.success) showSuccess(flash.success);
     if (flash?.error) showError(flash.error);
   }, [flash]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (editingVideo) setEditingVideo(null);
+        if (isUploadOpen && !isUploading) {
+          setIsUploadOpen(false);
+          setUploadFile(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingVideo, isUploadOpen, isUploading]);
+
+  useEffect(() => {
+    if (!isAdminUser && activeTab.startsWith('admin')) {
+      setActiveTab('library');
+    }
+  }, [activeTab, isAdminUser]);
 
   useEffect(() => {
     if (activeTab === 'analytics' && !analytics) {
@@ -620,12 +650,24 @@ export default function Dashboard() {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
             {t('dashboard.sidebar.settings')}
           </li>
-          {(user.role === 'admin' || user.role === 'super_admin') && (
+          {isAdminUser && (
             <>
               <li style={{ listStyle: 'none', margin: '16px 0 8px', padding: '0 18px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', opacity: 0.7 }}>{t('dashboard.sidebar.administration')}</li>
-              <li className="nav-item" onClick={() => window.location.href = '/admin'} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && (window.location.href = '/admin')}>
+              <li className={`nav-item ${activeTab === 'adminOverview' ? 'active' : ''}`} onClick={() => setActiveTab('adminOverview')} role="button" tabIndex={0} aria-current={activeTab === 'adminOverview' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('adminOverview')}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                {t('dashboard.sidebar.adminPanel')}
+                {t('dashboard.sidebar.adminOverview')}
+              </li>
+              <li className={`nav-item ${activeTab === 'adminUsers' ? 'active' : ''}`} onClick={() => setActiveTab('adminUsers')} role="button" tabIndex={0} aria-current={activeTab === 'adminUsers' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('adminUsers')}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a3 3 0 0 0-2-2.83"></path><path d="M16 3.13a3 3 0 0 1 0 5.74"></path></svg>
+                {t('dashboard.sidebar.adminUsers')}
+              </li>
+              <li className={`nav-item ${activeTab === 'adminTenants' ? 'active' : ''}`} onClick={() => setActiveTab('adminTenants')} role="button" tabIndex={0} aria-current={activeTab === 'adminTenants' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('adminTenants')}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-4"></path><path d="M9 9v.01"></path><path d="M9 13v.01"></path><path d="M9 17v.01"></path></svg>
+                {t('dashboard.sidebar.adminTenants')}
+              </li>
+              <li className={`nav-item ${activeTab === 'adminPlans' ? 'active' : ''}`} onClick={() => setActiveTab('adminPlans')} role="button" tabIndex={0} aria-current={activeTab === 'adminPlans' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('adminPlans')}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8z"></path><path d="M9 12l2 2 4-4"></path></svg>
+                {t('dashboard.sidebar.adminPlans')}
               </li>
             </>
           )}
@@ -908,22 +950,10 @@ export default function Dashboard() {
                       <>
                         <div className="settings-field">
                           <label htmlFor="settings-color" className="settings-label">{t('dashboard.settings.workspace.brandColor')}</label>
-                          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                            <input
-                              id="settings-color"
-                              type="color"
-                              value={settingsPrimaryColor}
-                              onChange={e => setSettingsPrimaryColor(e.target.value)}
-                              style={{ width: '40px', height: '40px', padding: '0', border: 'none', borderRadius: '8px', cursor: 'pointer', background: 'transparent' }}
-                            />
-                            <input
-                              type="text"
-                              className="settings-input"
-                              value={settingsPrimaryColor}
-                              onChange={e => setSettingsPrimaryColor(e.target.value)}
-                              style={{ flex: 1, fontFamily: 'monospace' }}
-                            />
-                          </div>
+                          <ColorPicker 
+                            color={settingsPrimaryColor} 
+                            onChange={setSettingsPrimaryColor} 
+                          />
                         </div>
                         <div className="settings-field">
                           <label htmlFor="settings-logo" className="settings-label">{t('dashboard.settings.workspace.logoUrl')}</label>
@@ -1250,13 +1280,27 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {isAdminUser && activeTab === 'adminOverview' && <AdminDashboard />}
+          {isAdminUser && activeTab === 'adminUsers' && <AdminUsersPage />}
+          {isAdminUser && activeTab === 'adminTenants' && <AdminTenantsPage />}
+          {isAdminUser && activeTab === 'adminPlans' && <AdminPlansPage />}
         </div>
       </main>
 
       {/* Edit Modal */}
       {editingVideo && (
         <div role="dialog" aria-modal="true" aria-label={t('dashboard.edit.title')} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 50 }}>
-          <div className="auth-card animate-fade-in" style={{ width: '100%', maxWidth: '440px', padding: '40px' }}>
+          <div className="auth-card animate-fade-in" style={{ width: '100%', maxWidth: '440px', padding: '40px', position: 'relative' }}>
+            <button
+              onClick={() => setEditingVideo(null)}
+              style={{ position: 'absolute', top: '16px', right: i18n.dir() === 'rtl' ? 'auto' : '16px', left: i18n.dir() === 'rtl' ? '16px' : 'auto', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px' }}
+              onMouseOver={e => e.currentTarget.style.color = 'var(--text-main)'}
+              onMouseOut={e => e.currentTarget.style.color = 'var(--text-muted)'}
+              aria-label={t('common.close')}
+            >
+              <X size={20} />
+            </button>
             <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '24px' }}>{t('dashboard.edit.title')}</h2>
             <div className="input-group">
               <input type="text" className="input-field" value={editTitle} onChange={e => setEditTitle(e.target.value)} style={{ paddingLeft: '16px' }} />
@@ -1265,50 +1309,25 @@ export default function Dashboard() {
             {hasFeature('privacy_controls') && (
               <div style={{ marginTop: '24px' }}>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('dashboard.edit.privacy')}</label>
-                <select
-                  className="input-field"
-                  value={editPrivacy}
-                  onChange={e => setEditPrivacy(e.target.value)}
-                  style={{ paddingLeft: '16px', appearance: 'none' }}
-                >
-                  <option value="public">{t('dashboard.edit.public')}</option>
-                  <option value="unlisted">{t('dashboard.edit.unlisted')}</option>
-                  <option value="private">{t('dashboard.edit.private')}</option>
-                </select>
+                <AdminSelect
+                  value={editPrivacy ? { value: editPrivacy, label: t(`dashboard.edit.${editPrivacy}`) } : null}
+                  onChange={(opt: any) => setEditPrivacy(opt ? opt.value : 'private')}
+                  options={[
+                    { value: 'public', label: t('dashboard.edit.public') },
+                    { value: 'unlisted', label: t('dashboard.edit.unlisted') },
+                    { value: 'private', label: t('dashboard.edit.private') }
+                  ]}
+                />
               </div>
             )}
 
             {hasFeature('custom_thumbnail') && (
               <div style={{ marginTop: '24px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>{t('dashboard.edit.customThumbnail')}</label>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={e => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        setThumbnailFile(e.target.files[0]);
-                      }
-                    }}
-                    style={{
-                      padding: '8px',
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      color: 'var(--text-muted)',
-                      flex: 1
-                    }}
-                  />
-                  {thumbnailFile && (
-                    <button
-                      onClick={() => setThumbnailFile(null)}
-                      style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '8px' }}
-                      title={t('dashboard.edit.clearSelection')}
-                    >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                    </button>
-                  )}
-                </div>
+                <ImagePicker
+                  label={t('dashboard.edit.customThumbnail')}
+                  value={thumbnailFile}
+                  onChange={setThumbnailFile}
+                />
               </div>
             )}
 
@@ -1361,7 +1380,7 @@ export default function Dashboard() {
                 {isSaving || isUploadingThumbnail ? t('common.saving') : t('dashboard.settings.profile.save')}
               </button>
               <button onClick={() => { setEditingVideo(null); setThumbnailFile(null); }} style={{ padding: '16px 24px', background: 'transparent', border: '1px solid var(--border-color)', borderRadius: '12px', color: 'var(--text-main)', fontWeight: 600, cursor: 'pointer' }}>
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
             <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--border-color)' }}>
@@ -1376,15 +1395,19 @@ export default function Dashboard() {
       {/* Upload Modal */}
       {isUploadOpen && (
         <div role="dialog" aria-modal="true" aria-label={t('dashboard.upload.title')} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 50 }}>
-          <div className="auth-card animate-fade-in" style={{ width: '100%', maxWidth: '520px', padding: '40px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: 700 }}>{t('dashboard.upload.title')}</h2>
-              {!isUploading && (
-                <button onClick={() => { setIsUploadOpen(false); setUploadFile(null); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px', borderRadius: '50%', display: 'flex' }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-              )}
-            </div>
+          <div className="auth-card animate-fade-in" style={{ width: '100%', maxWidth: '520px', padding: '40px', position: 'relative' }}>
+            {!isUploading && (
+              <button
+                onClick={() => { setIsUploadOpen(false); setUploadFile(null); }}
+                style={{ position: 'absolute', top: '16px', right: i18n.dir() === 'rtl' ? 'auto' : '16px', left: i18n.dir() === 'rtl' ? '16px' : 'auto', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px' }}
+                onMouseOver={e => e.currentTarget.style.color = 'var(--text-main)'}
+                onMouseOut={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                aria-label={t('common.close')}
+              >
+                <X size={20} />
+              </button>
+            )}
+            <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '32px' }}>{t('dashboard.upload.title')}</h2>
 
             {!isUploading && !uploadFile && (
               <div className="dropzone" onClick={() => document.getElementById('file-upload')?.click()}>

@@ -1035,7 +1035,6 @@ body {
   padding: 28px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  overflow: hidden;
 }
 
 .settings-glass-card::before {
@@ -1724,7 +1723,7 @@ body {
 
 .admin-search-icon {
   position: absolute;
-  left: 14px;
+  inset-inline-start: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-muted);
@@ -1735,7 +1734,9 @@ body {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  padding: 10px 14px 10px 40px;
+  padding: 10px;
+  padding-inline-start: 40px;
+  padding-inline-end: 14px;
   color: var(--text-main);
   font-family: var(--font-family);
   font-size: 13px;
@@ -1862,7 +1863,6 @@ body {
   color: var(--text-muted);
   unicode-bidi: plaintext;
 }
-
 .admin-table-date {
   color: var(--text-muted);
   font-size: 13px;
@@ -1905,7 +1905,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-right: 8px;
+  margin-inline-end: 8px;
 }
 
 .admin-status-dot.active {
@@ -1993,30 +1993,54 @@ body {
 /* Modal */
 .admin-modal-overlay {
   position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  animation: fadeIn 0.2s ease;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: clamp(16px, 3vw, 32px);
+  overflow-y: auto;
+  animation: adminOverlayFade 0.16s ease-out;
 }
 
 .admin-modal {
-  background: var(--bg-sidebar);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow: auto;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  width: min(100%, 500px);
+  max-height: min(760px, calc(100vh - 48px));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+    var(--bg-sidebar);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.62);
+  display: flex;
+  flex-direction: column;
+  animation: adminModalEnter 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .admin-modal-lg {
-  max-width: 700px;
+  width: min(100%, 760px);
+}
+
+@keyframes adminOverlayFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes adminModalEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .admin-modal-header {
@@ -2052,6 +2076,8 @@ body {
 
 .admin-modal-body {
   padding: 28px 32px 32px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .admin-modal-footer {
@@ -2581,13 +2607,14 @@ body {
 }
 
 @media (min-width: 769px) {
-  .admin-layout .admin-modal-overlay {
-    inset-inline-start: 280px;
+  .admin-modal-overlay {
+    left: 280px;
+    right: 0;
   }
 
-  [dir="rtl"] .admin-layout .admin-modal-overlay {
-    inset-inline-start: 280px;
-    inset-inline-end: 0;
+  [dir="rtl"] .admin-modal-overlay {
+    left: 0;
+    right: 280px;
   }
 }
 
@@ -2636,4 +2663,50 @@ body {
 /* Ensure Arabic text renders properly */
 [dir="rtl"] * {
   font-family: 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Arial', sans-serif;
+}
+
+/* SweetAlert Custom Buttons */
+.swal-btn-primary {
+  background: var(--gradient-brand);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 24px;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 0 8px;
+  transition: opacity 0.2s;
+}
+.swal-btn-primary:hover {
+  opacity: 0.9;
+}
+
+.swal-btn-danger {
+  background: var(--gradient-brand); /* User screenshot shows gradient brand for 'Yes, delete it' */
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 24px;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 0 8px;
+  transition: opacity 0.2s;
+}
+.swal-btn-danger:hover {
+  opacity: 0.9;
+}
+
+.swal-btn-cancel {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 12px;
+  padding: 14px 24px;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 0 8px;
+  transition: background 0.2s;
+}
+.swal-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.05);
 }

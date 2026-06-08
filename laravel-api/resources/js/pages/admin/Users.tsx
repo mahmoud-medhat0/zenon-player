@@ -3,9 +3,11 @@ import { usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 import { PageProps } from '../../types';
 import AdminLayout from '../../components/admin/AdminLayout';
+import AdminModal from '../../components/admin/AdminModal';
+import AdminSelect from '../../components/AdminSelect';
 import axios from 'axios';
 import { showSuccess, showError, confirmDelete } from '../../utils/alerts';
-import { Plus, Search, Edit2, Trash2, X, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
 
 interface User {
   id: string;
@@ -251,16 +253,15 @@ export default function UsersPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </form>
-          <select
-            className="admin-filter-select"
-            value={roleFilter}
-            onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
-          >
-            <option value="">{t('admin.users.allRoles')}</option>
-            {roleOptions.map((role) => (
-              <option key={role.value} value={role.value}>{role.label}</option>
-            ))}
-          </select>
+          <div style={{ minWidth: '160px' }}>
+            <AdminSelect
+              value={roleFilter ? roleOptions.find(r => r.value === roleFilter) : null}
+              onChange={(opt: any) => { setRoleFilter(opt ? opt.value : ''); setPage(1); }}
+              options={roleOptions}
+              placeholder={t('admin.users.allRoles')}
+              isClearable
+            />
+          </div>
         </div>
 
         <div className="admin-card-body">
@@ -367,159 +368,140 @@ export default function UsersPage() {
       </div>
 
       {showModal && (
-        <div className="admin-modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <h2>{editingUser ? t('admin.users.editUser') : t('admin.users.createUser')}</h2>
-              <button className="admin-modal-close" onClick={() => setShowModal(false)}>
-                <X size={20} />
+        <AdminModal
+          title={editingUser ? t('admin.users.editUser') : t('admin.users.createUser')}
+          onClose={() => setShowModal(false)}
+          formProps={{ onSubmit: handleSubmit }}
+          footer={
+            <>
+              <button type="button" className="admin-btn admin-btn-ghost" onClick={() => setShowModal(false)}>
+                {t('common.cancel')}
               </button>
-            </div>
-            <form onSubmit={handleSubmit} className="admin-modal-body">
-              <div className="admin-form-group">
-                <label>{t('admin.users.name')}</label>
-                <input
-                  type="text"
-                  className="admin-form-input"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="admin-form-group">
-                <label>{t('admin.users.email')}</label>
-                <input
-                  type="email"
-                  className="admin-form-input"
-                  value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
-                  required
-                />
-              </div>
-              {!editingUser && (
-                <>
-                  <div className="admin-form-group">
-                    <label>{t('admin.users.password')}</label>
-                    <input
-                      type="password"
-                      className="admin-form-input"
-                      placeholder={t('admin.users.passwordPlaceholder')}
-                      value={formPassword}
-                      onChange={(e) => setFormPassword(e.target.value)}
-                      required
-                      minLength={8}
-                    />
-                  </div>
-                  <div className="admin-form-group">
-                    <label>{t('admin.users.passwordConfirmation')}</label>
-                    <input
-                      type="password"
-                      className="admin-form-input"
-                      placeholder={t('admin.users.passwordPlaceholder')}
-                      value={formPasswordConfirm}
-                      onChange={(e) => setFormPasswordConfirm(e.target.value)}
-                      required
-                    />
-                  </div>
-                </>
-              )}
-              <div className="admin-form-row">
-                <div className="admin-form-group">
-                  <label>{t('admin.users.role')}</label>
-                  <select
-                    className="admin-form-select"
-                    value={formRole}
-                    onChange={(e) => setFormRole(e.target.value)}
-                  >
-                    {roleOptions.map((role) => (
-                      <option key={role.value} value={role.value}>{role.label}</option>
-                    ))}
-                  </select>
-                </div>
-                {!editingUser && (
-                  <div className="admin-form-group">
-                    <label>{t('admin.users.tenant')}</label>
-                    <select
-                      className="admin-form-select"
-                      value={formTenantId}
-                      onChange={(e) => setFormTenantId(e.target.value)}
-                      required
-                    >
-                      <option value="">{t('admin.users.tenantPlaceholder')}</option>
-                      {tenants.map((t) => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-              {editingUser && (
-                <div className="admin-form-group">
-                  <label className="admin-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={formActive}
-                      onChange={(e) => setFormActive(e.target.checked)}
-                    />
-                    {t('common.active')}
-                  </label>
-                </div>
-              )}
-              <div className="admin-modal-footer">
-                <button type="button" className="admin-btn admin-btn-ghost" onClick={() => setShowModal(false)}>
-                  {t('common.cancel')}
-                </button>
-                <button type="submit" className="admin-btn admin-btn-primary" disabled={submitting}>
-                  {submitting
-                    ? (editingUser ? t('admin.users.updating') : t('admin.users.creating'))
-                    : t('admin.users.save')}
-                </button>
-              </div>
-            </form>
+              <button type="submit" className="admin-btn admin-btn-primary" disabled={submitting}>
+                {submitting
+                  ? (editingUser ? t('admin.users.updating') : t('admin.users.creating'))
+                  : t('admin.users.save')}
+              </button>
+            </>
+          }
+        >
+          <div className="admin-form-group">
+            <label>{t('admin.users.name')}</label>
+            <input
+              type="text"
+              className="admin-form-input"
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              required
+            />
           </div>
-        </div>
+          <div className="admin-form-group">
+            <label>{t('admin.users.email')}</label>
+            <input
+              type="email"
+              className="admin-form-input"
+              value={formEmail}
+              onChange={(e) => setFormEmail(e.target.value)}
+              required
+            />
+          </div>
+          {!editingUser && (
+            <>
+              <div className="admin-form-group">
+                <label>{t('admin.users.password')}</label>
+                <input
+                  type="password"
+                  className="admin-form-input"
+                  placeholder={t('admin.users.passwordPlaceholder')}
+                  value={formPassword}
+                  onChange={(e) => setFormPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
+              </div>
+              <div className="admin-form-group">
+                <label>{t('admin.users.passwordConfirmation')}</label>
+                <input
+                  type="password"
+                  className="admin-form-input"
+                  placeholder={t('admin.users.passwordPlaceholder')}
+                  value={formPasswordConfirm}
+                  onChange={(e) => setFormPasswordConfirm(e.target.value)}
+                  required
+                />
+              </div>
+            </>
+          )}
+          <div className="admin-form-row">
+            <div className="admin-form-group">
+              <label>{t('admin.users.role')}</label>
+              <AdminSelect
+                value={formRole ? roleOptions.find(r => r.value === formRole) : null}
+                onChange={(opt: any) => setFormRole(opt ? opt.value : '')}
+                options={roleOptions}
+              />
+            </div>
+            {!editingUser && (
+              <div className="admin-form-group">
+                <label>{t('admin.users.tenant')}</label>
+                <AdminSelect
+                  value={formTenantId ? { value: formTenantId, label: tenants.find(t => t.id === formTenantId)?.name || '' } : null}
+                  onChange={(opt: any) => setFormTenantId(opt ? opt.value : '')}
+                  options={tenants.map(t => ({ value: t.id, label: t.name }))}
+                  placeholder={t('admin.users.tenantPlaceholder')}
+                  isClearable
+                />
+              </div>
+            )}
+          </div>
+          {editingUser && (
+            <div className="admin-form-group">
+              <label className="admin-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={formActive}
+                  onChange={(e) => setFormActive(e.target.checked)}
+                />
+                {t('common.active')}
+              </label>
+            </div>
+          )}
+        </AdminModal>
       )}
 
       {/* Assign Plan Modal */}
       {showPlanModal && planUser && (
-        <div className="admin-modal-overlay" onClick={() => setShowPlanModal(false)}>
-          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <h2>{t('admin.users.changePlanFor', { name: planUser.name })}</h2>
-              <button className="admin-modal-close" onClick={() => setShowPlanModal(false)}>
-                <X size={20} />
+        <AdminModal
+          title={t('admin.users.changePlanFor', { name: planUser.name })}
+          onClose={() => setShowPlanModal(false)}
+          footer={
+            <>
+              <button type="button" className="admin-btn admin-btn-ghost" onClick={() => setShowPlanModal(false)}>{t('common.cancel')}</button>
+              <button
+                type="button"
+                className="admin-btn admin-btn-primary"
+                disabled={!selectedPlanId || assigning}
+                onClick={assignPlan}
+              >
+                {assigning ? t('admin.users.assigningPlan') : t('admin.users.assignPlan')}
               </button>
-            </div>
-            <div className="admin-modal-body">
-              <p style={{ marginBottom: '16px', color: 'var(--text-muted)' }}>
-                {t('admin.users.changePlanDesc')} <strong dir="auto">({planUser.tenant?.name})</strong>.
-              </p>
-              <div className="admin-form-group">
-                <label>{t('admin.users.selectPlan')}</label>
-                <select
-                  className="admin-form-select"
-                  value={selectedPlanId}
-                  onChange={(e) => setSelectedPlanId(e.target.value)}
-                >
-                  <option value="">{t('admin.users.choosePlan')}</option>
-                  {plans.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="admin-modal-footer">
-                <button className="admin-btn admin-btn-ghost" onClick={() => setShowPlanModal(false)}>{t('common.cancel')}</button>
-                <button
-                  className="admin-btn admin-btn-primary"
-                  disabled={!selectedPlanId || assigning}
-                  onClick={assignPlan}
-                >
-                  {assigning ? t('admin.users.assigningPlan') : t('admin.users.assignPlan')}
-                </button>
-              </div>
-            </div>
+            </>
+          }
+        >
+          <p style={{ marginBottom: '16px', color: 'var(--text-muted)' }}>
+            {t('admin.users.changePlanDesc')} <strong dir="auto">({planUser.tenant?.name})</strong>.
+          </p>
+          <div className="admin-form-group">
+            <label>{t('admin.users.selectPlan')}</label>
+            <AdminSelect
+              value={selectedPlanId ? { value: selectedPlanId, label: plans.find(p => p.id === selectedPlanId)?.name || '' } : null}
+              onChange={(opt: any) => setSelectedPlanId(opt ? opt.value : '')}
+              options={plans.map(p => ({ value: p.id, label: p.name }))}
+              placeholder={t('admin.users.choosePlan')}
+              isClearable
+            />
           </div>
-        </div>
+        </AdminModal>
       )}
     </div>
   );
