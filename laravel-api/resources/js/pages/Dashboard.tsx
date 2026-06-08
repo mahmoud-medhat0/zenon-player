@@ -86,6 +86,9 @@ export default function Dashboard() {
   const { t, i18n } = useTranslation();
   const currentLocale = (i18n.resolvedLanguage || i18n.language || 'en').split('-')[0] === 'ar' ? 'ar' : 'en';
 
+  const firstError = (errors: Record<string, string>, fields: string[]) =>
+    fields.map((field) => errors[field]).find(Boolean);
+
   const hasFeature = (key: string) => {
     if (!user || !user.tenant || !user.tenant.plan) return false;
     if (!user.tenant.plan.is_active || !user.tenant.is_active) return false;
@@ -176,43 +179,21 @@ export default function Dashboard() {
     setIsAuthLoading(true);
 
     if (isLogin) {
-      axios.post('/login', { email, password })
-        .then(() => {
-          router.visit('/', { preserveState: false });
-        })
-        .catch((error) => {
-          if (error.response?.data?.errors) {
-            const errs = error.response.data.errors;
-            setAuthError(errs.email?.[0] || errs.password?.[0] || t('auth.authFailed'));
-          } else if (error.response?.data?.message) {
-            setAuthError(error.response.data.message);
-          } else {
-            setAuthError(t('auth.authFailed'));
-          }
-          setIsAuthLoading(false);
-        });
+      router.post('/login', { email, password }, {
+        preserveScroll: true,
+        onError: (errors) => {
+          setAuthError(firstError(errors, ['email', 'password']) || t('auth.authFailed'));
+        },
+        onFinish: () => setIsAuthLoading(false),
+      });
     } else {
-      axios.post('/register', { name, email, password, tenant_name: tenantName })
-        .then(() => {
-          router.visit('/', { preserveState: false });
-        })
-        .catch((error) => {
-          if (error.response?.data?.errors) {
-            const errs = error.response.data.errors;
-            setAuthError(
-              errs.email?.[0] || 
-              errs.password?.[0] || 
-              errs.name?.[0] || 
-              errs.tenant_name?.[0] || 
-              t('auth.authFailed')
-            );
-          } else if (error.response?.data?.message) {
-            setAuthError(error.response.data.message);
-          } else {
-            setAuthError(t('auth.authFailed'));
-          }
-          setIsAuthLoading(false);
-        });
+      router.post('/register', { name, email, password, tenant_name: tenantName }, {
+        preserveScroll: true,
+        onError: (errors) => {
+          setAuthError(firstError(errors, ['email', 'password', 'name', 'tenant_name']) || t('auth.authFailed'));
+        },
+        onFinish: () => setIsAuthLoading(false),
+      });
     }
   };
 

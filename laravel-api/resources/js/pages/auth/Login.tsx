@@ -1,7 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { router } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
-import axios from 'axios';
 import LanguageSwitcher from '../../components/LanguageSwitcher';
 
 export default function Login() {
@@ -14,49 +13,30 @@ export default function Login() {
   const [authError, setAuthError] = useState('');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
 
+  const firstError = (errors: Record<string, string>, fields: string[]) =>
+    fields.map((field) => errors[field]).find(Boolean);
+
   const handleAuth = (e: FormEvent) => {
     e.preventDefault();
     setAuthError('');
     setIsAuthLoading(true);
 
     if (isLogin) {
-      axios.post('/login', { email, password })
-        .then((response) => {
-          router.visit('/');
-        })
-        .catch((error) => {
-          if (error.response?.data?.errors) {
-            const errs = error.response.data.errors;
-            setAuthError(errs.email?.[0] || errs.password?.[0] || t('auth.authFailed'));
-          } else if (error.response?.data?.message) {
-            setAuthError(error.response.data.message);
-          } else {
-            setAuthError(t('auth.authFailed'));
-          }
-          setIsAuthLoading(false);
-        });
+      router.post('/login', { email, password }, {
+        preserveScroll: true,
+        onError: (errors) => {
+          setAuthError(firstError(errors, ['email', 'password']) || t('auth.authFailed'));
+        },
+        onFinish: () => setIsAuthLoading(false),
+      });
     } else {
-      axios.post('/register', { name, email, password, tenant_name: tenantName })
-        .then(() => {
-          router.visit('/');
-        })
-        .catch((error) => {
-          if (error.response?.data?.errors) {
-            const errs = error.response.data.errors;
-            setAuthError(
-              errs.email?.[0] ||
-              errs.password?.[0] ||
-              errs.name?.[0] ||
-              errs.tenant_name?.[0] ||
-              t('auth.authFailed')
-            );
-          } else if (error.response?.data?.message) {
-            setAuthError(error.response.data.message);
-          } else {
-            setAuthError(t('auth.authFailed'));
-          }
-          setIsAuthLoading(false);
-        });
+      router.post('/register', { name, email, password, tenant_name: tenantName }, {
+        preserveScroll: true,
+        onError: (errors) => {
+          setAuthError(firstError(errors, ['email', 'password', 'name', 'tenant_name']) || t('auth.authFailed'));
+        },
+        onFinish: () => setIsAuthLoading(false),
+      });
     }
   };
 

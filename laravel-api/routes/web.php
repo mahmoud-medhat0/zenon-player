@@ -33,7 +33,7 @@ Route::post('/login', function (Request $request) {
     }
     Auth::login($user, $request->boolean('remember'));
     $request->session()->regenerate();
-    if ($request->wantsJson() || $request->ajax()) {
+    if (!$request->header('X-Inertia') && ($request->wantsJson() || $request->ajax())) {
         return response()->json(['message' => 'Logged in successfully']);
     }
 
@@ -64,7 +64,7 @@ Route::post('/register', function (Request $request) {
     Auth::login($user);
     $request->session()->regenerate();
 
-    if ($request->wantsJson() || $request->ajax()) {
+    if (!$request->header('X-Inertia') && ($request->wantsJson() || $request->ajax())) {
         return response()->json(['message' => 'Registered successfully']);
     }
 
@@ -76,7 +76,7 @@ Route::post('/logout', function (Request $request) {
     $request->session()->invalidate();
     $request->session()->regenerateToken();
 
-    if ($request->wantsJson() || $request->ajax()) {
+    if (!$request->header('X-Inertia') && ($request->wantsJson() || $request->ajax())) {
         return response()->json(['message' => 'Logged out successfully']);
     }
 
@@ -93,4 +93,4 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
 
 // Catch-all route for SPA (must be last)
 Route::get('/{any}', [PageController::class, 'dashboard'])
-    ->where('any', '.*');
+    ->where('any', '^(?!api(?:/|$)|docs(?:/|$)|sanctum(?:/|$)|storage(?:/|$)).*');
