@@ -32,6 +32,9 @@ class HandleInertiaRequests extends Middleware
                         'is_active' => $request->user()->tenant->is_active,
                         'primary_color' => $request->user()->tenant->primary_color,
                         'logo_url' => $request->user()->tenant->logo_url,
+                        'webhook_url' => $request->user()->tenant->webhook_url,
+                        'webhook_secret' => $request->user()->tenant->webhook_secret,
+                        'allowed_domains' => $request->user()->tenant->allowed_domains,
                         'plan' => $request->user()->tenant->plan ? [
                             'id' => $request->user()->tenant->plan->id,
                             'name' => $request->user()->tenant->plan->name,
