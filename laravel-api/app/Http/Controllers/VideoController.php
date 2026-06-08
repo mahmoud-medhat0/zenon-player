@@ -74,6 +74,10 @@ class VideoController extends Controller
             $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
             $thumbnailUrl = "https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
             $streamUrl = "https://{$cfDomain}/{$video->cloudflare_uid}/manifest/video.m3u8";
+        } elseif ($video->bunny_video_id) {
+            $bunnyDomain = config('video.bunny.pull_zone');
+            $thumbnailUrl = "https://{$bunnyDomain}/{$video->bunny_video_id}/thumbnail.jpg";
+            $streamUrl = "https://{$bunnyDomain}/{$video->bunny_video_id}/playlist.m3u8";
         }
 
         return response()->json([
@@ -108,6 +112,9 @@ class VideoController extends Controller
         if ($video->cloudflare_uid) {
             $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
             return redirect("https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg");
+        } elseif ($video->bunny_video_id) {
+            $bunnyDomain = config('video.bunny.pull_zone');
+            return redirect("https://{$bunnyDomain}/{$video->bunny_video_id}/thumbnail.jpg");
         }
 
         $path = "videos/{$video->tenant_id}/{$video->id}_data/thumbnail.jpg";
@@ -191,6 +198,17 @@ class VideoController extends Controller
                     \Illuminate\Support\Facades\Log::warning('Failed to delete video from Cloudflare: ' . $e->getMessage());
                 }
             }
+        } elseif ($video->bunny_video_id) {
+            $libraryId = config('video.bunny.library_id');
+            $apiKey = config('video.bunny.api_key');
+            if ($libraryId && $apiKey) {
+                try {
+                    \Illuminate\Support\Facades\Http::withHeaders(['AccessKey' => $apiKey])
+                        ->delete("https://video.bunnycdn.com/library/{$libraryId}/videos/{$video->bunny_video_id}");
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::warning('Failed to delete video from Bunny Stream: ' . $e->getMessage());
+                }
+            }
         }
 
         Storage::disk('local')->deleteDirectory("videos/{$video->tenant_id}/{$video->id}_data");
@@ -218,6 +236,9 @@ class VideoController extends Controller
         if ($video->cloudflare_uid && basename($file) === 'playlist.m3u8') {
             $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
             return redirect("https://{$cfDomain}/{$video->cloudflare_uid}/manifest/video.m3u8");
+        } elseif ($video->bunny_video_id && basename($file) === 'playlist.m3u8') {
+            $bunnyDomain = config('video.bunny.pull_zone');
+            return redirect("https://{$bunnyDomain}/{$video->bunny_video_id}/playlist.m3u8");
         }
 
         $file = basename($file);

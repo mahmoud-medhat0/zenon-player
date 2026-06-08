@@ -163,7 +163,12 @@ class VideoUploadController extends Controller
             'status' => 'processing',
         ]);
 
-        \App\Jobs\ProcessVideo::dispatch($video);
+        $processor = config('video.processor');
+        if ($processor === 'bunny') {
+            \App\Jobs\UploadToBunny::dispatch($video);
+        } else {
+            \App\Jobs\ProcessVideo::dispatch($video);
+        }
 
         return response()->json([
             'message' => 'Upload confirmed and processing started',

@@ -21,6 +21,7 @@ class Video extends Model
         'views',
         'size_bytes',
         'cloudflare_uid',
+        'bunny_video_id',
     ];
 
     protected $casts = [

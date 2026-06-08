@@ -11,3 +11,4 @@ Route::get('/videos/{id}/thumbnail', [VideoController::class, 'thumbnail']);
 Route::get('/videos/{id}/stream/{file}', [VideoController::class, 'stream'])->where('file', '.*');
 
 Route::post('/webhooks/cloudflare', [\App\Http\Controllers\CloudflareWebhookController::class, 'handle']);
+Route::post('/webhooks/bunny', [\App\Http\Controllers\BunnyWebhookController::class, 'handle']);
