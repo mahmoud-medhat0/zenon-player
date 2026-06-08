@@ -1,0 +1,1 @@
+import{t as e}from"./app-C8LPnjax.js";import t from"./Dashboard-DOIph-n3.js";var n=e();function r(){return(0,n.jsx)(t,{initialTab:`analytics`})}export{r as default};

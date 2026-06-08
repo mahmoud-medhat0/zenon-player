@@ -209,7 +209,11 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
         const formData = new FormData();
         formData.append('file', uploadFile);
         
-        await axios.post(upload_url, formData, {
+        // Create a custom axios instance for this request without the default headers
+        const cfAxios = axios.create();
+        delete cfAxios.defaults.headers.common['X-Requested-With'];
+
+        await cfAxios.post(upload_url, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
           onUploadProgress: (progressEvent) => {
             const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || uploadFile.size));
