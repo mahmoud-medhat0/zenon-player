@@ -4,7 +4,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\PlanController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:web', 'admin'])->prefix('admin')->group(function () {
+Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
     Route::get('/users', [AdminController::class, 'indexUsers']);
     Route::post('/users', [AdminController::class, 'storeUser']);
     Route::get('/users/{id}', [AdminController::class, 'showUser']);

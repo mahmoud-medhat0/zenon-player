@@ -7,7 +7,7 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TenantUserController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('auth:web')->group(function () {
+Route::middleware('auth:sanctum')->group(function () {
     Route::get('/analytics/overview', [AnalyticsController::class, 'overview'])->middleware('feature:analytics');
     Route::get('/analytics/videos/{id}', [AnalyticsController::class, 'videoAnalytics'])->middleware('feature:analytics');
 
