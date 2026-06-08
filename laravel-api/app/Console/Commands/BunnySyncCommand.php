@@ -2,9 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\SendTenantWebhook;
 use App\Models\Video;
+use App\Services\BunnyVideoStatusService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
 
 class BunnySyncCommand extends Command
 {
@@ -13,7 +14,7 @@ class BunnySyncCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'bunny:sync';
+    protected $signature = 'bunny:sync {--notify-ready : Resend ready tenant webhooks for videos that are already ready}';
 
     /**
      * The console command description.
@@ -25,7 +26,7 @@ class BunnySyncCommand extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(BunnyVideoStatusService $bunnyVideos)
     {
         $libraryId = config('video.bunny.library_id');
         $apiKey = config('video.bunny.api_key');
@@ -35,47 +36,36 @@ class BunnySyncCommand extends Command
             return;
         }
 
-        $videos = Video::where('status', 'processing')
+        $statuses = $this->option('notify-ready') ? ['processing', 'ready'] : ['processing'];
+
+        $videos = Video::whereIn('status', $statuses)
             ->whereNotNull('bunny_video_id')
             ->get();
 
         if ($videos->isEmpty()) {
-            $this->info('No processing Bunny videos found to sync.');
+            $this->info('No Bunny videos found to sync.');
             return;
         }
 
-        $this->info("Found {$videos->count()} videos processing on Bunny Stream. Checking statuses...");
+        $this->info("Found {$videos->count()} Bunny Stream videos to sync.");
 
         foreach ($videos as $video) {
-            try {
-                $response = Http::withHeaders([
-                    'AccessKey' => $apiKey,
-                    'Accept' => 'application/json',
-                ])->get("https://video.bunnycdn.com/library/{$libraryId}/videos/{$video->bunny_video_id}");
+            if ($video->status === 'ready') {
+                SendTenantWebhook::dispatchSync($video, 'video.ready');
+                $this->info("Ready webhook resent for video {$video->id}.");
+                continue;
+            }
 
-                if ($response->successful()) {
-                    $status = $response->json('status');
-                    
-                    if ($status == 3 || $status == 4) { // Finished
-                        $length = $response->json('length');
-                        $video->update([
-                            'status' => 'ready',
-                            'duration_seconds' => $length ? round($length) : null,
-                        ]);
-                        \App\Jobs\SendTenantWebhook::dispatch($video, 'video.ready');
-                        $this->info("✅ Video {$video->id} is now Ready!");
-                    } elseif ($status == 5 || $status == 6) { // Failed
-                        $video->update(['status' => 'failed']);
-                        \App\Jobs\SendTenantWebhook::dispatch($video, 'video.failed');
-                        $this->error("❌ Video {$video->id} Failed on Bunny.");
-                    } else {
-                        $this->line("⏳ Video {$video->id} is still encoding (Status: {$status})...");
-                    }
-                } else {
-                    $this->error("Failed to fetch status for video {$video->id}");
-                }
-            } catch (\Exception $e) {
-                $this->error("Error syncing video {$video->id}: " . $e->getMessage());
+            $previousStatus = $video->status;
+            $changed = $bunnyVideos->syncFromBunny($video);
+            $video->refresh();
+
+            if ($changed && $video->status === 'ready') {
+                $this->info("Video {$video->id} is now ready.");
+            } elseif ($changed && $video->status === 'failed') {
+                $this->error("Video {$video->id} failed on Bunny.");
+            } elseif ($previousStatus === $video->status) {
+                $this->line("Video {$video->id} is still {$video->status}.");
             }
         }
 

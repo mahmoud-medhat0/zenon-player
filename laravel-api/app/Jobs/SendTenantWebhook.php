@@ -39,10 +39,15 @@ class SendTenantWebhook implements ShouldQueue
         $payload = [
             'event' => $this->event,
             'video_id' => $this->video->id,
+            'title' => $this->video->title,
             'status' => $this->video->status,
             'bunny_video_id' => $this->video->bunny_video_id,
             'cloudflare_uid' => $this->video->cloudflare_uid,
             'duration' => $this->video->duration_seconds,
+            'duration_seconds' => $this->video->duration_seconds,
+            'thumbnail_url' => $this->thumbnailUrl(),
+            'stream_url' => $this->streamUrl(),
+            'public_url' => url("/api/public/videos/{$this->video->id}"),
             'timestamp' => now()->toIso8601String(),
         ];
 
@@ -52,7 +57,7 @@ class SendTenantWebhook implements ShouldQueue
             $request = Http::timeout(10)->withOptions(['verify' => false]);
             
             if ($tenant->webhook_secret) {
-                $request->withHeaders([
+                $request = $request->withHeaders([
                     'X-Zenon-Signature' => hash_hmac('sha256', json_encode($payload), $tenant->webhook_secret)
                 ]);
             }
@@ -68,5 +73,45 @@ class SendTenantWebhook implements ShouldQueue
         } catch (\Exception $e) {
             Log::error("Tenant Webhook Exception for Tenant {$tenant->id}: " . $e->getMessage());
         }
+    }
+
+    private function thumbnailUrl(): ?string
+    {
+        if ($this->video->cloudflare_uid) {
+            $domain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
+            return "https://{$domain}/{$this->video->cloudflare_uid}/thumbnails/thumbnail.jpg";
+        }
+
+        if ($this->video->bunny_video_id) {
+            $domain = config('video.bunny.pull_zone');
+
+            return $domain ? "https://{$domain}/{$this->video->bunny_video_id}/thumbnail.jpg" : null;
+        }
+
+        if ($this->video->status === 'ready') {
+            return url("/api/videos/{$this->video->id}/thumbnail");
+        }
+
+        return null;
+    }
+
+    private function streamUrl(): ?string
+    {
+        if ($this->video->status !== 'ready') {
+            return null;
+        }
+
+        if ($this->video->cloudflare_uid) {
+            $domain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
+            return "https://{$domain}/{$this->video->cloudflare_uid}/manifest/video.m3u8";
+        }
+
+        if ($this->video->bunny_video_id) {
+            $domain = config('video.bunny.pull_zone');
+
+            return $domain ? "https://{$domain}/{$this->video->bunny_video_id}/playlist.m3u8" : null;
+        }
+
+        return url("/api/videos/{$this->video->id}/stream/playlist.m3u8");
     }
 }

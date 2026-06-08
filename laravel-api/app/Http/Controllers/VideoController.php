@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Video;
+use App\Services\BunnyVideoStatusService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use OpenApi\Attributes as OA;
@@ -12,38 +13,14 @@ use OpenApi\Attributes as OA;
 #[OA\SecurityScheme(securityScheme: "bearerAuth", type: "http", scheme: "bearer")]
 class VideoController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, BunnyVideoStatusService $bunnyVideos)
     {
         $videos = Video::latest()->paginate(20);
         
         // Real-time Bunny Stream Sync (Lazy check on dashboard load/poll)
-        $bunnyLibraryId = config('video.bunny.library_id');
-        $bunnyApiKey = config('video.bunny.api_key');
-        if ($bunnyLibraryId && $bunnyApiKey) {
-            foreach ($videos as $video) {
-                if ($video->status === 'processing' && $video->bunny_video_id) {
-                    try {
-                        $response = \Illuminate\Support\Facades\Http::withHeaders([
-                            'AccessKey' => $bunnyApiKey,
-                            'Accept' => 'application/json',
-                        ])->get("https://video.bunnycdn.com/library/{$bunnyLibraryId}/videos/{$video->bunny_video_id}");
-
-                        if ($response->successful()) {
-                            $status = $response->json('status');
-                            if ($status == 4) { // Finished
-                                $length = $response->json('length');
-                                $video->update([
-                                    'status' => 'ready',
-                                    'duration_seconds' => $length ? round($length) : null,
-                                ]);
-                            } elseif ($status == 5 || $status == 6) { // Failed
-                                $video->update(['status' => 'failed']);
-                            }
-                        }
-                    } catch (\Exception $e) {
-                        // Silently ignore to avoid breaking the dashboard
-                    }
-                }
+        foreach ($videos as $video) {
+            if ($video->status === 'processing' && $video->bunny_video_id) {
+                $bunnyVideos->syncFromBunny($video);
             }
         }
 
