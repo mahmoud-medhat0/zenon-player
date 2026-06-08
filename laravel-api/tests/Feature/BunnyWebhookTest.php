@@ -86,6 +86,49 @@ class BunnyWebhookTest extends TestCase
         Http::assertSent(fn (HttpRequest $request) => $this->isReadyTenantWebhook($request, $video));
     }
 
+    public function test_public_video_details_lazy_syncs_bunny_before_returning_status(): void
+    {
+        $this->configureBunny();
+
+        $tenant = $this->createTenantWithWebhook();
+        $user = User::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'API User',
+            'email' => 'api-user@example.com',
+            'password' => Hash::make('password'),
+            'role' => 'owner',
+            'is_active' => true,
+        ]);
+        $video = $this->createProcessingBunnyVideo($tenant);
+
+        Http::fake([
+            'https://video.bunnycdn.com/library/123/videos/bunny-guid' => Http::response([
+                'guid' => 'bunny-guid',
+                'status' => 3,
+                'length' => 248,
+            ]),
+            'https://academy.test/api/zenon-webhook' => Http::response(['message' => 'ok']),
+        ]);
+
+        $this->actingAs($user)
+            ->getJson("/api/public/videos/{$video->id}")
+            ->assertOk()
+            ->assertJson([
+                'id' => $video->id,
+                'status' => 'ready',
+                'duration' => 248,
+                'thumbnail_url' => 'https://vz.test/bunny-guid/thumbnail.jpg',
+            ]);
+
+        $this->assertDatabaseHas('videos', [
+            'id' => $video->id,
+            'status' => 'ready',
+            'duration_seconds' => 248,
+        ]);
+
+        Http::assertSent(fn (HttpRequest $request) => $this->isReadyTenantWebhook($request, $video));
+    }
+
     private function configureBunny(): void
     {
         config([

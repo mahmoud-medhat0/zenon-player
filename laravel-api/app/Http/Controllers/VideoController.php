@@ -70,9 +70,14 @@ class VideoController extends Controller
     ))]
     #[OA\Response(response: 403, description: "Forbidden")]
     #[OA\Response(response: 404, description: "Not Found")]
-    public function publicShow($id)
+    public function publicShow($id, BunnyVideoStatusService $bunnyVideos)
     {
         $video = Video::with('tenant')->findOrFail($id);
+
+        if ($video->status === 'processing' && $video->bunny_video_id) {
+            $bunnyVideos->syncFromBunny($video);
+            $video = $video->fresh('tenant') ?? $video;
+        }
 
         if ($video->privacy === 'private' && !auth('sanctum')->check()) {
             abort(403, 'This video is private.');
