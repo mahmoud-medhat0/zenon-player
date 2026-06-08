@@ -104,19 +104,21 @@ class VideoController extends Controller
         $thumbnailUrl = null;
         $streamUrl = null;
 
-        if ($video->status === 'ready') {
-            $thumbnailUrl = url("/api/videos/{$video->id}/thumbnail");
-            $streamUrl = url("/api/videos/{$video->id}/stream/playlist.m3u8");
-
-            if ($video->cloudflare_uid) {
-                $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
-                $thumbnailUrl = "https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
+        if ($video->cloudflare_uid) {
+            $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
+            $thumbnailUrl = "https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
+            if ($video->status === 'ready') {
                 $streamUrl = "https://{$cfDomain}/{$video->cloudflare_uid}/manifest/video.m3u8";
-            } elseif ($video->bunny_video_id) {
-                $bunnyDomain = config('video.bunny.pull_zone');
-                $thumbnailUrl = "https://{$bunnyDomain}/{$video->bunny_video_id}/thumbnail.jpg";
+            }
+        } elseif ($video->bunny_video_id) {
+            $bunnyDomain = config('video.bunny.pull_zone');
+            $thumbnailUrl = "https://{$bunnyDomain}/{$video->bunny_video_id}/thumbnail.jpg";
+            if ($video->status === 'ready') {
                 $streamUrl = $this->getBunnyStreamUrl($video->bunny_video_id, $bunnyDomain);
             }
+        } elseif ($video->status === 'ready') {
+            $thumbnailUrl = url("/api/videos/{$video->id}/thumbnail");
+            $streamUrl = url("/api/videos/{$video->id}/stream/playlist.m3u8");
         }
 
         return response()->json([

@@ -62,9 +62,11 @@ class BunnySyncCommand extends Command
                             'status' => 'ready',
                             'duration_seconds' => $length ? round($length) : null,
                         ]);
+                        \App\Jobs\SendTenantWebhook::dispatch($video, 'video.ready');
                         $this->info("✅ Video {$video->id} is now Ready!");
                     } elseif ($status == 5 || $status == 6) { // Failed
                         $video->update(['status' => 'failed']);
+                        \App\Jobs\SendTenantWebhook::dispatch($video, 'video.failed');
                         $this->error("❌ Video {$video->id} Failed on Bunny.");
                     } else {
                         $this->line("⏳ Video {$video->id} is still encoding (Status: {$status})...");
