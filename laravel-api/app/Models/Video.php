@@ -20,6 +20,7 @@ class Video extends Model
         'security_settings',
         'views',
         'size_bytes',
+        'cloudflare_uid',
     ];
 
     protected $casts = [

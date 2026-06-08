@@ -180,8 +180,13 @@ class VideoController extends Controller
             $accountId = config('video.cloudflare.account_id');
             $apiToken = config('video.cloudflare.api_token');
             if ($accountId && $apiToken) {
-                \Illuminate\Support\Facades\Http::withToken($apiToken)
-                    ->delete("https://api.cloudflare.com/client/v4/accounts/{$accountId}/stream/{$video->cloudflare_uid}");
+                try {
+                    \Illuminate\Support\Facades\Http::withToken($apiToken)
+                        ->withOptions(['verify' => false])
+                        ->delete("https://api.cloudflare.com/client/v4/accounts/{$accountId}/stream/{$video->cloudflare_uid}");
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::warning('Failed to delete video from Cloudflare: ' . $e->getMessage());
+                }
             }
         }
 
