@@ -57,7 +57,11 @@ class BunnySyncCommand extends Command
                     $status = $response->json('status');
                     
                     if ($status == 4) { // Finished
-                        $video->update(['status' => 'ready']);
+                        $length = $response->json('length');
+                        $video->update([
+                            'status' => 'ready',
+                            'duration_seconds' => $length ? round($length) : null,
+                        ]);
                         $this->info("✅ Video {$video->id} is now Ready!");
                     } elseif ($status == 5 || $status == 6) { // Failed
                         $video->update(['status' => 'failed']);
