@@ -6,35 +6,35 @@ import { confirmDelete, showSuccess, showError } from '../utils/alerts';
 import VideoPlayer from '../components/VideoPlayer';
 import SecureImage from '../components/SecureImage';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-import AdminDashboard from './admin/Dashboard';
-import AdminUsersPage from './admin/Users';
-import AdminTenantsPage from './admin/Tenants';
-import AdminPlansPage from './admin/Plans';
 import { useTranslation } from 'react-i18next';
 import AdminSelect from '../components/AdminSelect';
 import { X } from 'lucide-react';
 import ImagePicker from '../components/ImagePicker';
 import ColorPicker from '../components/ColorPicker';
 
-export default function Dashboard() {
+type DashboardTab = 'library' | 'analytics' | 'settings' | 'team';
+
+const dashboardRoutes: Record<DashboardTab, string> = {
+  library: '/library',
+  analytics: '/analytics',
+  settings: '/settings',
+  team: '/team',
+};
+
+const isDashboardTab = (value: unknown): value is DashboardTab =>
+  typeof value === 'string' && value in dashboardRoutes;
+
+export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } = {}) {
   const { props } = usePage<PageProps>();
   const user = props.auth.user;
   const flash = props.flash;
+  const requestedTab = initialTab ?? (isDashboardTab(props.activeTab) ? props.activeTab : 'library');
 
-  const [activeTab, setActiveTab] = useState('library');
+  const [activeTab, setActiveTab] = useState<DashboardTab>(requestedTab);
 
   // Videos State
   const [videos, setVideos] = useState<any[]>([]);
   const [isLoadingVideos, setIsLoadingVideos] = useState(true);
-
-  // Auth State
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [tenantName, setTenantName] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [isAuthLoading, setIsAuthLoading] = useState(false);
 
   // Upload State
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -86,9 +86,6 @@ export default function Dashboard() {
   const { t, i18n } = useTranslation();
   const currentLocale = (i18n.resolvedLanguage || i18n.language || 'en').split('-')[0] === 'ar' ? 'ar' : 'en';
 
-  const firstError = (errors: Record<string, string>, fields: string[]) =>
-    fields.map((field) => errors[field]).find(Boolean);
-
   const hasFeature = (key: string) => {
     if (!user || !user.tenant || !user.tenant.plan) return false;
     if (!user.tenant.plan.is_active || !user.tenant.is_active) return false;
@@ -96,6 +93,20 @@ export default function Dashboard() {
   };
 
   const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
+
+  const canAccessTab = (tab: DashboardTab) => {
+    if (tab === 'analytics') return hasFeature('analytics');
+    if (tab === 'team') return hasFeature('team_management') && user?.role === 'owner';
+    return true;
+  };
+
+  const navigateToTab = (tab: DashboardTab) => {
+    setActiveTab(tab);
+    router.visit(dashboardRoutes[tab], {
+      preserveScroll: true,
+      preserveState: true,
+    });
+  };
 
   const formatRelativeDate = (value?: string, fallback = '') => {
     if (!value) return fallback;
@@ -137,6 +148,10 @@ export default function Dashboard() {
   }, [flash]);
 
   useEffect(() => {
+    setActiveTab(requestedTab);
+  }, [requestedTab]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (editingVideo) setEditingVideo(null);
@@ -151,10 +166,10 @@ export default function Dashboard() {
   }, [editingVideo, isUploadOpen, isUploading]);
 
   useEffect(() => {
-    if (!isAdminUser && activeTab.startsWith('admin')) {
-      setActiveTab('library');
+    if (user && !canAccessTab(activeTab)) {
+      navigateToTab('library');
     }
-  }, [activeTab, isAdminUser]);
+  }, [activeTab, user]);
 
   useEffect(() => {
     if (activeTab === 'analytics' && !analytics) {
@@ -172,30 +187,6 @@ export default function Dashboard() {
       fetchAnalytics();
     }
   }, [activeTab, analytics]);
-
-  const handleAuth = (e: FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    setIsAuthLoading(true);
-
-    if (isLogin) {
-      router.post('/login', { email, password }, {
-        preserveScroll: true,
-        onError: (errors) => {
-          setAuthError(firstError(errors, ['email', 'password']) || t('auth.authFailed'));
-        },
-        onFinish: () => setIsAuthLoading(false),
-      });
-    } else {
-      router.post('/register', { name, email, password, tenant_name: tenantName }, {
-        preserveScroll: true,
-        onError: (errors) => {
-          setAuthError(firstError(errors, ['email', 'password', 'name', 'tenant_name']) || t('auth.authFailed'));
-        },
-        onFinish: () => setIsAuthLoading(false),
-      });
-    }
-  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -500,94 +491,7 @@ export default function Dashboard() {
   };
 
   if (!user) {
-    return (
-      <div className="auth-container animate-fade-in">
-        <div className="auth-language-switcher">
-          <LanguageSwitcher />
-        </div>
-        <div className="auth-hero">
-          <div className="auth-hero-content">
-            <div className="logo" style={{ fontSize: '36px', marginBottom: '24px' }}>
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gradient">
-                <polygon points="5 3 19 12 5 21 5 3"></polygon>
-              </svg>
-              {t('common.appName')}
-            </div>
-            <h1 style={{ fontSize: '56px', fontWeight: 800, lineHeight: 1.1, marginBottom: '24px' }}>
-              {t('auth.heroTitle')} <span className="text-gradient">{t('auth.heroGradient')}</span>.
-            </h1>
-            <p style={{ fontSize: '20px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.6 }}>
-              {t('auth.heroDesc')}
-            </p>
-          </div>
-        </div>
-
-        <div className="auth-form-wrapper">
-          <div className="auth-card animate-fade-in">
-            <h2 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '8px' }}>
-              {isLogin ? t('auth.welcomeBack') : t('auth.createAccount')}
-            </h2>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>
-              {isLogin ? t('auth.welcomeDesc') : t('auth.createDesc')}
-            </p>
-
-            {authError && (
-              <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#f87171', padding: '12px 16px', borderRadius: '8px', marginBottom: '24px', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                {authError}
-              </div>
-            )}
-
-            <form onSubmit={handleAuth}>
-              {!isLogin && (
-                <>
-                  <div className="input-group">
-                    <input type="text" className="input-field" placeholder={t('auth.fullName')} value={name} onChange={e => setName(e.target.value)} required />
-                    <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                  </div>
-                  <div className="input-group">
-                    <input type="text" className="input-field" placeholder={t('auth.workspaceName')} value={tenantName} onChange={e => setTenantName(e.target.value)} required />
-                    <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-                  </div>
-                </>
-              )}
-              <div className="input-group">
-                <input type="email" className="input-field" placeholder={t('auth.email')} value={email} onChange={e => setEmail(e.target.value)} required />
-                <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-              </div>
-              <div className="input-group">
-                <input type="password" className="input-field" placeholder={t('auth.password')} value={password} onChange={e => setPassword(e.target.value)} required />
-                <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-              </div>
-
-              <button type="submit" className="btn-primary" disabled={isAuthLoading} style={{ marginTop: '32px' }}>
-                {isAuthLoading ? (
-                  <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
-                ) : (
-                  isLogin ? t('auth.signIn') : t('auth.signUp')
-                )}
-              </button>
-            </form>
-
-            <div style={{ marginTop: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              {isLogin ? t('auth.noAccount') : t('auth.hasAccount')}
-              <button onClick={() => setIsLogin(!isLogin)} style={{ background: 'none', border: 'none', color: 'var(--primary-hover)', fontWeight: 600, cursor: 'pointer', fontSize: '15px' }}>
-                {isLogin ? t('auth.createOne') : t('auth.signInLink')}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {playingVideo && (
-          <VideoPlayer
-            videoId={playingVideo}
-            token={null}
-            onClose={() => setPlayingVideo(null)}
-          />
-        )}
-
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -611,44 +515,60 @@ export default function Dashboard() {
         </div>
 
         <ul className="nav-menu" role="navigation" aria-label="Main navigation">
-          <li className={`nav-item ${activeTab === 'library' ? 'active' : ''}`} onClick={() => setActiveTab('library')} role="button" tabIndex={0} aria-current={activeTab === 'library' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('library')}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-            {t('dashboard.sidebar.library')}
+          <li>
+            <button type="button" className={`nav-item ${activeTab === 'library' ? 'active' : ''}`} onClick={() => navigateToTab('library')} aria-current={activeTab === 'library' ? 'page' : undefined}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+              {t('dashboard.sidebar.library')}
+            </button>
           </li>
           {hasFeature('analytics') && (
-            <li className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')} role="button" tabIndex={0} aria-current={activeTab === 'analytics' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('analytics')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-              {t('dashboard.sidebar.analytics')}
+            <li>
+              <button type="button" className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => navigateToTab('analytics')} aria-current={activeTab === 'analytics' ? 'page' : undefined}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                {t('dashboard.sidebar.analytics')}
+              </button>
             </li>
           )}
           {hasFeature('team_management') && user.role === 'owner' && (
-            <li className={`nav-item ${activeTab === 'team' ? 'active' : ''}`} onClick={() => setActiveTab('team')} role="button" tabIndex={0} aria-current={activeTab === 'team' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('team')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-              {t('dashboard.sidebar.team')}
+            <li>
+              <button type="button" className={`nav-item ${activeTab === 'team' ? 'active' : ''}`} onClick={() => navigateToTab('team')} aria-current={activeTab === 'team' ? 'page' : undefined}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                {t('dashboard.sidebar.team')}
+              </button>
             </li>
           )}
-          <li className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')} role="button" tabIndex={0} aria-current={activeTab === 'settings' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('settings')}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-            {t('dashboard.sidebar.settings')}
+          <li>
+            <button type="button" className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => navigateToTab('settings')} aria-current={activeTab === 'settings' ? 'page' : undefined}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              {t('dashboard.sidebar.settings')}
+            </button>
           </li>
           {isAdminUser && (
             <>
               <li style={{ listStyle: 'none', margin: '16px 0 8px', padding: '0 18px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', opacity: 0.7 }}>{t('dashboard.sidebar.administration')}</li>
-              <li className={`nav-item ${activeTab === 'adminOverview' ? 'active' : ''}`} onClick={() => setActiveTab('adminOverview')} role="button" tabIndex={0} aria-current={activeTab === 'adminOverview' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('adminOverview')}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                {t('dashboard.sidebar.adminOverview')}
+              <li>
+                <button type="button" className="nav-item" onClick={() => router.visit('/admin')}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                  {t('dashboard.sidebar.adminOverview')}
+                </button>
               </li>
-              <li className={`nav-item ${activeTab === 'adminUsers' ? 'active' : ''}`} onClick={() => setActiveTab('adminUsers')} role="button" tabIndex={0} aria-current={activeTab === 'adminUsers' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('adminUsers')}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a3 3 0 0 0-2-2.83"></path><path d="M16 3.13a3 3 0 0 1 0 5.74"></path></svg>
-                {t('dashboard.sidebar.adminUsers')}
+              <li>
+                <button type="button" className="nav-item" onClick={() => router.visit('/admin/users')}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a3 3 0 0 0-2-2.83"></path><path d="M16 3.13a3 3 0 0 1 0 5.74"></path></svg>
+                  {t('dashboard.sidebar.adminUsers')}
+                </button>
               </li>
-              <li className={`nav-item ${activeTab === 'adminTenants' ? 'active' : ''}`} onClick={() => setActiveTab('adminTenants')} role="button" tabIndex={0} aria-current={activeTab === 'adminTenants' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('adminTenants')}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-4"></path><path d="M9 9v.01"></path><path d="M9 13v.01"></path><path d="M9 17v.01"></path></svg>
-                {t('dashboard.sidebar.adminTenants')}
+              <li>
+                <button type="button" className="nav-item" onClick={() => router.visit('/admin/tenants')}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-4"></path><path d="M9 9v.01"></path><path d="M9 13v.01"></path><path d="M9 17v.01"></path></svg>
+                  {t('dashboard.sidebar.adminTenants')}
+                </button>
               </li>
-              <li className={`nav-item ${activeTab === 'adminPlans' ? 'active' : ''}`} onClick={() => setActiveTab('adminPlans')} role="button" tabIndex={0} aria-current={activeTab === 'adminPlans' ? 'page' : undefined} onKeyDown={e => e.key === 'Enter' && setActiveTab('adminPlans')}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8z"></path><path d="M9 12l2 2 4-4"></path></svg>
-                {t('dashboard.sidebar.adminPlans')}
+              <li>
+                <button type="button" className="nav-item" onClick={() => router.visit('/admin/plans')}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8z"></path><path d="M9 12l2 2 4-4"></path></svg>
+                  {t('dashboard.sidebar.adminPlans')}
+                </button>
               </li>
             </>
           )}
@@ -1262,10 +1182,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {isAdminUser && activeTab === 'adminOverview' && <AdminDashboard />}
-          {isAdminUser && activeTab === 'adminUsers' && <AdminUsersPage />}
-          {isAdminUser && activeTab === 'adminTenants' && <AdminTenantsPage />}
-          {isAdminUser && activeTab === 'adminPlans' && <AdminPlansPage />}
         </div>
       </main>
 

@@ -351,16 +351,22 @@ body {
 }
 
 .nav-item {
+  width: 100%;
   padding: 14px 18px;
+  border: 0;
   border-radius: 12px;
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s ease;
   font-weight: 500;
+  font-family: var(--font-family);
   display: flex;
   align-items: center;
   gap: 14px;
   font-size: 15px;
+  text-align: left;
+  text-decoration: none;
 }
 
 .nav-item:hover {

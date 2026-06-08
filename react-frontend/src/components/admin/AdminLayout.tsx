@@ -14,9 +14,9 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const appNavItems = [
     { to: '/', icon: ArrowLeft, label: 'Back to App', isExternal: true },
-    { to: '/?tab=library', icon: Film, label: 'Video Library' },
-    { to: '/?tab=analytics', icon: BarChart3, label: 'Analytics' },
-    { to: '/?tab=settings', icon: Settings, label: 'Settings' },
+    { to: '/library', icon: Film, label: 'Video Library' },
+    { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+    { to: '/settings', icon: Settings, label: 'Settings' },
   ];
 
   const adminNavItems = [

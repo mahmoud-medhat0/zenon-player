@@ -60,6 +60,34 @@ class AuthenticatedDashboardTest extends TestCase
         $this->get('/admin')->assertRedirect('/login');
     }
 
+    public function test_guest_dashboard_request_redirects_to_login(): void
+    {
+        $this->get('/')->assertRedirect('/login');
+        $this->get('/settings')->assertRedirect('/login');
+    }
+
+    public function test_dashboard_section_routes_render_requested_page(): void
+    {
+        $user = $this->createActiveOwner();
+
+        $this->actingAs($user)
+            ->get('/settings')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Settings')
+                ->where('activeTab', 'settings')
+                ->where('auth.user.email', $user->email)
+            );
+
+        $this->actingAs($user)
+            ->get('/library')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Library')
+                ->where('activeTab', 'library')
+            );
+    }
+
     public function test_authenticated_user_is_redirected_away_from_login_page(): void
     {
         $user = $this->createActiveOwner();
@@ -92,7 +120,7 @@ class AuthenticatedDashboardTest extends TestCase
         $this->get('/')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Dashboard')
+                ->component('Library')
                 ->where('auth.user.email', 'new-owner@example.com')
                 ->where('auth.user.tenant.plan.slug', 'free')
             );
@@ -121,7 +149,7 @@ class AuthenticatedDashboardTest extends TestCase
         $this->get('/')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Dashboard')
+                ->component('Library')
                 ->where('auth.user.email', $user->email)
             );
     }

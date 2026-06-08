@@ -7,9 +7,36 @@ use Inertia\Inertia;
 
 class PageController extends Controller
 {
+    private const DASHBOARD_PAGES = [
+        'library' => 'Library',
+        'analytics' => 'Analytics',
+        'settings' => 'Settings',
+        'team' => 'Team',
+    ];
+
     public function dashboard()
     {
-        return Inertia::render('Dashboard');
+        return $this->dashboardPage('library');
+    }
+
+    public function library()
+    {
+        return $this->dashboardPage('library');
+    }
+
+    public function analytics()
+    {
+        return $this->dashboardPage('analytics');
+    }
+
+    public function settings()
+    {
+        return $this->dashboardPage('settings');
+    }
+
+    public function team()
+    {
+        return $this->dashboardPage('team');
     }
 
     public function embed($videoId)
@@ -50,6 +77,13 @@ class PageController extends Controller
     public function login()
     {
         return Inertia::render('auth/Login');
+    }
+
+    private function dashboardPage(string $activeTab)
+    {
+        return Inertia::render(self::DASHBOARD_PAGES[$activeTab], [
+            'activeTab' => $activeTab,
+        ]);
     }
 
     private function authorizeAdmin()

@@ -35,5 +35,6 @@ export interface PageProps {
     success: string | null;
     error: string | null;
   };
+  activeTab?: string;
   [key: string]: unknown;
 }

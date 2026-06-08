@@ -28,9 +28,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     {
       section: t('admin.layout.sections.tools'),
       items: [
-        { label: t('admin.layout.nav.analytics'), href: '/admin/analytics', icon: BarChart3 },
-        { label: t('admin.layout.nav.media'), href: '/admin/media', icon: Film },
-        { label: t('admin.layout.nav.settings'), href: '/admin/settings', icon: Settings },
+        { label: t('admin.layout.nav.analytics'), href: '/analytics', icon: BarChart3 },
+        { label: t('admin.layout.nav.media'), href: '/library', icon: Film },
+        { label: t('admin.layout.nav.settings'), href: '/settings', icon: Settings },
       ],
     },
   ];
