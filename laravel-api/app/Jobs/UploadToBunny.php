@@ -87,6 +87,9 @@ class UploadToBunny implements ShouldQueue
 
         Log::info("Successfully uploaded video {$this->video->id} to Bunny. Awaiting webhook for completion.");
 
+        // Dispatch webhook for processing state
+        \App\Jobs\SendTenantWebhook::dispatch($this->video, 'video.processing');
+
         // Delete the local file to save space
         Storage::disk('local')->delete($filePath);
     }

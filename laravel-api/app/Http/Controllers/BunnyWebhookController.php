@@ -29,6 +29,15 @@ class BunnyWebhookController extends Controller
             return response()->json(['message' => 'Video not found'], 404);
         }
 
+        // Bunny Stream Statuses: 0 = Queued, 1 = Processing, 2 = Encoding
+        if (in_array($status, [0, 1, 2])) {
+            $video->status = 'processing';
+            $video->save();
+            Log::info("Video {$video->id} is processing on Bunny.");
+            SendTenantWebhook::dispatch($video, 'video.processing');
+            return response()->json(['message' => 'Status updated to processing']);
+        }
+
         // Bunny Stream Statuses: 3 = Finished, 4 = Resolution finished
         if ($status == 3 || $status == 4) {
             // Fetch video duration from Bunny API
