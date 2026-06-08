@@ -19,7 +19,8 @@ class VideoController extends Controller
         $videos->getCollection()->transform(function($video) {
             $thumbnail = null;
             if ($video->cloudflare_uid) {
-                $thumbnail = "https://videodelivery.net/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
+                $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
+                $thumbnail = "https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
             } elseif ($video->status === 'ready') {
                 $thumbnail = url("/api/videos/{$video->id}/thumbnail");
             }
@@ -70,8 +71,9 @@ class VideoController extends Controller
         $streamUrl = url("/api/videos/{$video->id}/stream/playlist.m3u8");
 
         if ($video->cloudflare_uid) {
-            $thumbnailUrl = "https://videodelivery.net/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
-            $streamUrl = "https://videodelivery.net/{$video->cloudflare_uid}/manifest/video.m3u8";
+            $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
+            $thumbnailUrl = "https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
+            $streamUrl = "https://{$cfDomain}/{$video->cloudflare_uid}/manifest/video.m3u8";
         }
 
         return response()->json([
@@ -104,7 +106,8 @@ class VideoController extends Controller
         }
 
         if ($video->cloudflare_uid) {
-            return redirect("https://videodelivery.net/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg");
+            $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
+            return redirect("https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg");
         }
 
         $path = "videos/{$video->tenant_id}/{$video->id}_data/thumbnail.jpg";
@@ -213,7 +216,8 @@ class VideoController extends Controller
         }
 
         if ($video->cloudflare_uid && basename($file) === 'playlist.m3u8') {
-            return redirect("https://videodelivery.net/{$video->cloudflare_uid}/manifest/video.m3u8");
+            $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
+            return redirect("https://{$cfDomain}/{$video->cloudflare_uid}/manifest/video.m3u8");
         }
 
         $file = basename($file);
