@@ -389,6 +389,9 @@
   "embed": {
     "loadingVideo": "Loading video...",
     "videoUnavailable": "Video unavailable",
+    "videoPrivate": "This video is private.",
+    "videoProcessing": "This video is still processing.",
+    "videoFailed": "This video could not be processed.",
     "failedToLoad": "Failed to load video. Please try again later."
   }
 }

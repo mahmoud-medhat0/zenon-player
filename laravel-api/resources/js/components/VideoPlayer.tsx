@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, Loader2, RotateCcw, RotateCw } from 'lucide-react';
+import { AlertTriangle, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, Loader2, RotateCcw, RotateCw } from 'lucide-react';
 
 interface VideoPlayerProps {
   videoId: string;
@@ -8,6 +8,7 @@ interface VideoPlayerProps {
   onClose?: () => void;
   isEmbed?: boolean;
   primaryColor?: string;
+  streamUrl?: string | null;
 }
 
 const formatTime = (time: number) => {
@@ -17,7 +18,7 @@ const formatTime = (time: number) => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, primaryColor }: VideoPlayerProps) {
+export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, primaryColor, streamUrl }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -35,18 +36,44 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
   const [isBuffering, setIsBuffering] = useState(true);
   const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(false);
   const [skipAnimation, setSkipAnimation] = useState<'forward' | 'backward' | null>(null);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    const streamUrl = `/api/videos/${videoId}/stream/playlist.m3u8`;
+    const resolvedStreamUrl = streamUrl ?? `/api/videos/${videoId}/stream/playlist.m3u8`;
+    let hls: Hls | null = null;
+    let objectUrl: string | null = null;
+    let nativeMetadataHandler: (() => void) | null = null;
+    let networkRecoveryAttempts = 0;
+    let mediaRecoveryAttempts = 0;
+
+    setPlaybackError(null);
+    setIsBuffering(true);
+    setLevels([]);
+    setSelectedLevel(-1);
+
+    const showPlaybackError = (message: string) => {
+      setPlaybackError(message);
+      setIsBuffering(false);
+      if (hls) {
+        hls.destroy();
+        hls = null;
+        hlsRef.current = null;
+      }
+    };
+
+    if (!resolvedStreamUrl) {
+      showPlaybackError('This video is not ready to play yet.');
+      return;
+    }
 
     if (Hls.isSupported()) {
-      const hls = new Hls();
+      hls = new Hls();
       hlsRef.current = hls;
 
-      hls.loadSource(streamUrl);
+      hls.loadSource(resolvedStreamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
         setLevels(data.levels.map((l: any) => l.height));
@@ -59,22 +86,53 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              hls.startLoad();
+              if (networkRecoveryAttempts < 2) {
+                networkRecoveryAttempts += 1;
+                hls?.startLoad();
+                return;
+              }
+              showPlaybackError('The video stream could not be loaded. It may be private, unavailable, or blocked by the network.');
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
-              hls.recoverMediaError();
+              if (mediaRecoveryAttempts < 1) {
+                mediaRecoveryAttempts += 1;
+                hls?.recoverMediaError();
+                return;
+              }
+              showPlaybackError('This video cannot be played in the current browser.');
               break;
             default:
-              hls.destroy();
+              showPlaybackError('Playback failed. Please try again later.');
               break;
           }
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = streamUrl;
-      video.addEventListener('loadedmetadata', () => {
+      if (token) {
+        fetch(resolvedStreamUrl, { headers: { 'Authorization': `Bearer ${token}` } })
+          .then(res => {
+            if (!res.ok) {
+              throw new Error(`HTTP ${res.status}`);
+            }
+            return res.blob();
+          })
+          .then(blob => {
+            objectUrl = URL.createObjectURL(blob);
+            video.src = objectUrl;
+          })
+          .catch(() => {
+            video.src = resolvedStreamUrl;
+          });
+      } else {
+        video.src = resolvedStreamUrl;
+      }
+
+      nativeMetadataHandler = () => {
         video.play().then(() => setIsPlaying(true)).catch(e => console.error("Autoplay prevented:", e));
-      });
+      };
+      video.addEventListener('loadedmetadata', nativeMetadataHandler);
+    } else {
+      showPlaybackError('This browser cannot play this video stream.');
     }
 
     const handleTimeUpdate = () => setCurrentTime(video.currentTime);
@@ -83,6 +141,9 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
     const handlePause = () => setIsPlaying(false);
     const handleWaiting = () => setIsBuffering(true);
     const handlePlaying = () => setIsBuffering(false);
+    const handleVideoError = () => {
+      showPlaybackError('The video stream could not be loaded. It may be private, unavailable, or blocked by the network.');
+    };
 
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('durationchange', handleDurationChange);
@@ -90,6 +151,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
     video.addEventListener('pause', handlePause);
     video.addEventListener('waiting', handleWaiting);
     video.addEventListener('playing', handlePlaying);
+    video.addEventListener('error', handleVideoError);
 
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
@@ -98,23 +160,34 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
+      video.removeEventListener('error', handleVideoError);
+      if (nativeMetadataHandler) {
+        video.removeEventListener('loadedmetadata', nativeMetadataHandler);
+      }
       if (hlsRef.current) {
         hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
       }
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current);
       }
     };
-  }, [videoId, token]);
+  }, [videoId, token, streamUrl]);
 
   const togglePlay = () => {
-    if (videoRef.current) {
+    const video = videoRef.current;
+    if (video && !playbackError) {
       if (isPlaying) {
-        videoRef.current.pause();
+        video.pause();
       } else {
-        videoRef.current.play();
+        video.play().catch(() => {
+          setPlaybackError('Playback could not start. Please try again.');
+          setIsBuffering(false);
+        });
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
@@ -224,9 +297,20 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
       onMouseLeave={handleMouseLeave}
       style={{ position: 'relative', overflow: 'hidden', backgroundColor: '#000', borderRadius: isFullscreen || isEmbed ? '0' : '12px', width: isEmbed ? '100vw' : undefined, height: isEmbed ? '100vh' : undefined, '--primary': primaryColor || '#4f46e5' } as React.CSSProperties}
     >
-      {isBuffering && (
+      {isBuffering && !playbackError && (
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5 }}>
           <Loader2 className="spinner" size={48} color="#4f46e5" />
+        </div>
+      )}
+
+      {playbackError && (
+        <div className="player-error-overlay" role="alert">
+          <AlertTriangle className="player-error-icon" size={34} />
+          <div className="player-error-title">Video unavailable</div>
+          <div className="player-error-message">{playbackError}</div>
+          <button className="player-error-retry" type="button" onClick={() => window.location.reload()}>
+            Try again
+          </button>
         </div>
       )}
 
@@ -244,7 +328,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
         style={{ width: '100%', height: '100%', outline: 'none', objectFit: 'contain', cursor: 'pointer' }}
       />
 
-      <div
+      {!playbackError && <div
         className={`custom-controls-bar ${showControls ? 'visible' : 'hidden'}`}
       >
         <div className="progress-container">
@@ -336,7 +420,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
             </button>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 

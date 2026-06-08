@@ -1331,12 +1331,12 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
                   type="text"
                   readOnly
                   className="input-field"
-                  value={`<iframe src="${window.location.origin}/embed/${editingVideo.id}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`}
+                  value={`<iframe src="${window.location.origin}/embed/${editingVideo.id}" width="640" height="360" style="width:100%;aspect-ratio:16/9;border:0;" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`}
                   style={{ paddingLeft: '16px', fontSize: '13px', color: 'var(--text-muted)', fontFamily: 'monospace' }}
                 />
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(`<iframe src="${window.location.origin}/embed/${editingVideo.id}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`);
+                    navigator.clipboard.writeText(`<iframe src="${window.location.origin}/embed/${editingVideo.id}" width="640" height="360" style="width:100%;aspect-ratio:16/9;border:0;" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`);
                     alert(t('dashboard.edit.codeCopied'));
                   }}
                   style={{ padding: '0 16px', background: 'var(--gradient-brand)', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}
