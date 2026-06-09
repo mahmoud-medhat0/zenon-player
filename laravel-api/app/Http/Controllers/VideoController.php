@@ -104,9 +104,9 @@ class VideoController extends Controller
             }
         } elseif ($video->bunny_video_id) {
             $bunnyDomain = config('video.bunny.pull_zone');
-            $thumbnailUrl = "https://{$bunnyDomain}/{$video->bunny_video_id}/thumbnail.jpg";
+            $thumbnailUrl = $this->getBunnySignedUrl($video->bunny_video_id, $bunnyDomain, 'thumbnail.jpg');
             if ($video->status === 'ready') {
-                $streamUrl = $this->getBunnyStreamUrl($video->bunny_video_id, $bunnyDomain);
+                $streamUrl = $this->getBunnySignedUrl($video->bunny_video_id, $bunnyDomain, 'playlist.m3u8');
             }
         } elseif ($video->status === 'ready') {
             $thumbnailUrl = url("/api/videos/{$video->id}/thumbnail");
@@ -164,7 +164,7 @@ class VideoController extends Controller
             return redirect("https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg");
         } elseif ($video->bunny_video_id) {
             $bunnyDomain = config('video.bunny.pull_zone');
-            return redirect("https://{$bunnyDomain}/{$video->bunny_video_id}/thumbnail.jpg");
+            return redirect($this->getBunnySignedUrl($video->bunny_video_id, $bunnyDomain, 'thumbnail.jpg'));
         }
 
         $path = "videos/{$video->tenant_id}/{$video->id}_data/thumbnail.jpg";
@@ -346,16 +346,16 @@ class VideoController extends Controller
     /**
      * Generate a securely signed Bunny Stream URL
      */
-    protected function getBunnyStreamUrl($videoId, $domain)
+    protected function getBunnySignedUrl($videoId, $domain, $file = 'playlist.m3u8')
     {
         $securityKey = config('video.bunny.security_key');
         
         if (!$securityKey) {
-            return "https://{$domain}/{$videoId}/playlist.m3u8";
+            return "https://{$domain}/{$videoId}/{$file}";
         }
 
         $expires = time() + 7200; // 2 hours expiration
-        $path = "/{$videoId}/playlist.m3u8";
+        $path = "/{$videoId}/{$file}";
 
         // Hashable string: SecurityKey + Path + Expires
         $hashableBase = $securityKey . $path . $expires;
@@ -365,7 +365,7 @@ class VideoController extends Controller
         $token = strtr(base64_encode($hash), '+/', '-_');
         $token = str_replace('=', '', $token);
 
-        return "https://{$domain}/{$videoId}/playlist.m3u8?token={$token}&expires={$expires}";
+        return "https://{$domain}{$path}?token={$token}&expires={$expires}";
     }
 
     /**

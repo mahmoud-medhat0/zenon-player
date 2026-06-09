@@ -94,7 +94,7 @@ export default function EmbedPlayer({ videoId }: Props) {
   }, [videoId, t]);
 
   return (
-    <div style={{ width: '100vw', height: '100vh', backgroundColor: 'black' }}>
+    <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, backgroundColor: 'black' }}>
       {isLoading && <EmbedMessage message={t('embed.loadingVideo')} isLoading />}
       {!isLoading && errorMessage && <EmbedMessage message={errorMessage} />}
       {!isLoading && video && (

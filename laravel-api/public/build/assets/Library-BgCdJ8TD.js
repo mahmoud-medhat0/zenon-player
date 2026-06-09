@@ -1,1 +1,0 @@
-import{t as e}from"./app-B0LbEZNg.js";import t from"./Dashboard-BSWcqm_m.js";var n=e();function r(){return(0,n.jsx)(t,{initialTab:`library`})}export{r as default};

@@ -1009,7 +1009,9 @@ body {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   padding: 6px;
-  min-width: 160px;
+  min-width: 140px; /* Reduced from 160px for mobile */
+  max-height: calc(100vh - 80px); /* Prevent overflowing screen height */
+  overflow-y: auto; /* Allow scrolling if it overflows */
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255,255,255,0.1);
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
@@ -2795,3 +2797,13 @@ body {
 .swal-btn-cancel:hover {
   background: rgba(255, 255, 255, 0.05);
 }
+
+@media (max-width: 480px) {
+  .custom-controls-bar { padding: 8px 12px; gap: 8px; }
+  .control-btn { padding: 2px; }
+  .control-btn svg { width: 18px; height: 18px; }
+  .time-display { font-size: 11px; margin-left: 4px; }
+  .skip-btn { display: none; }
+  .volume-container { display: none; } /* Hide volume on tiny mobile screens */
+}
+
