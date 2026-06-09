@@ -11,6 +11,7 @@ interface EmbedVideo {
   id: string;
   status: string;
   stream_url: string | null;
+  thumbnail_url?: string | null;
   branding?: {
     primary_color?: string | null;
   };
@@ -103,6 +104,7 @@ export default function EmbedPlayer({ videoId }: Props) {
           token={null}
           isEmbed={true}
           streamUrl={video.stream_url}
+          thumbnailUrl={video.thumbnail_url}
           primaryColor={video.branding?.primary_color || '#4f46e5'}
         />
       )}

@@ -9,6 +9,7 @@ interface VideoPlayerProps {
   isEmbed?: boolean;
   primaryColor?: string;
   streamUrl?: string | null;
+  thumbnailUrl?: string | null;
 }
 
 const formatTime = (time: number) => {
@@ -18,7 +19,7 @@ const formatTime = (time: number) => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, primaryColor, streamUrl }: VideoPlayerProps) {
+export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, primaryColor, streamUrl, thumbnailUrl }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -325,7 +326,8 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
         ref={videoRef}
         onClick={togglePlay}
         playsInline
-        style={{ width: '100%', height: '100%', outline: 'none', objectFit: 'contain', cursor: 'pointer' }}
+        poster={thumbnailUrl || undefined}
+        style={{ width: '100%', height: '100%', outline: 'none', objectFit: 'contain', cursor: 'pointer', backgroundColor: 'transparent' }}
       />
 
       {!playbackError && <div

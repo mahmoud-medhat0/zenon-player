@@ -1,0 +1,1 @@
+import{t as e}from"./app-z6R_i-oD.js";import t from"./Dashboard-DV5PYPio.js";var n=e();function r(){return(0,n.jsx)(t,{initialTab:`library`})}export{r as default};
