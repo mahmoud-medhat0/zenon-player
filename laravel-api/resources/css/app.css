@@ -2812,7 +2812,7 @@ body {
   width: 100% !important;
   color: var(--text-main);
   border-collapse: collapse !important;
-  table-layout: auto;
+  table-layout: fixed !important;
 }
 
 .vimeo-datatable thead th {
@@ -2860,6 +2860,7 @@ body {
   margin-bottom: 16px;
   flex-wrap: wrap;
   gap: 16px;
+  width: 100%;
 }
 
 .dt-layout-row:last-child {
@@ -2867,6 +2868,13 @@ body {
   margin-bottom: 0;
   border-top: 1px solid var(--border-color);
   padding-top: 16px;
+}
+
+.dt-layout-full,
+.dt-layout-cell:has(.vimeo-datatable) {
+  width: 100% !important;
+  flex: 1 1 100% !important;
+  display: block !important;
 }
 
 .dt-length select {
