@@ -12,7 +12,11 @@ class ImportVimeoVideoJob implements ShouldQueue
 {
     use Queueable;
 
+    public $tries = 5;
     public $timeout = 600;
+    
+    // Use exponential backoff for retries: 1m, 2m, 4m, 8m...
+    public $backoff = [60, 120, 240, 480];
 
     public function __construct(public Video $video, public string $mp4Url)
     {
@@ -39,7 +43,12 @@ class ImportVimeoVideoJob implements ShouldQueue
         ]);
 
         if (!$fetchResponse->successful()) {
-            Log::error("Failed to fetch video to Bunny Stream for: {$this->video->title}");
+            if ($fetchResponse->status() === 429 || $fetchResponse->serverError()) {
+                Log::warning("Bunny API limit/error. Retrying {$this->video->title}. Status: {$fetchResponse->status()}");
+                throw new \Exception("Bunny API Error: " . $fetchResponse->status());
+            }
+
+            Log::error("Failed to fetch video to Bunny Stream for: {$this->video->title}. Status: {$fetchResponse->status()} Body: {$fetchResponse->body()}");
             $this->video->update(['status' => 'failed']);
             return;
         }
