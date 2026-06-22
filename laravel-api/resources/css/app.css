@@ -2807,3 +2807,124 @@ body {
   .volume-container { display: none; } /* Hide volume on tiny mobile screens */
 }
 
+/* DataTables Custom Styles */
+.vimeo-datatable {
+  width: 100% !important;
+  color: var(--text-main);
+  border-collapse: collapse !important;
+}
+
+.vimeo-datatable thead th {
+  border-bottom: 1px solid var(--border-color) !important;
+  color: var(--text-muted);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 16px 24px !important;
+  font-weight: 600;
+}
+
+.vimeo-datatable tbody tr {
+  border-bottom: 1px solid var(--border-color) !important;
+  transition: background 0.2s;
+  background: transparent !important;
+}
+
+.vimeo-datatable tbody tr:hover {
+  background: rgba(255,255,255,0.03) !important;
+}
+
+.vimeo-datatable tbody td {
+  padding: 16px 24px !important;
+  vertical-align: middle;
+  border: none !important;
+  color: var(--text-muted);
+}
+
+.vimeo-datatable tbody td:first-child {
+  color: var(--text-main);
+}
+
+.dt-layout-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.dt-layout-row:last-child {
+  margin-top: 16px;
+  margin-bottom: 0;
+  border-top: 1px solid var(--border-color);
+  padding-top: 16px;
+}
+
+.dt-length select {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-main) !important;
+  border-radius: 6px !important;
+  padding: 6px 12px !important;
+  outline: none;
+  margin: 0 8px;
+}
+
+.dt-search input {
+  background: rgba(255,255,255,0.02) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-main) !important;
+  border-radius: 8px !important;
+  padding: 8px 16px !important;
+  outline: none;
+  min-width: 250px;
+  margin-left: 8px;
+}
+
+.dt-info {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.dt-paging button {
+  padding: 6px 16px !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--border-color) !important;
+  background: rgba(255,255,255,0.05) !important;
+  color: var(--text-main) !important;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+  margin-left: 4px;
+}
+
+.dt-paging button:hover:not(.disabled) {
+  background: rgba(255,255,255,0.1) !important;
+}
+
+.dt-paging button.current {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #fff !important;
+}
+
+.dt-paging button.disabled {
+  background: rgba(255,255,255,0.02) !important;
+  color: var(--text-muted) !important;
+  cursor: not-allowed !important;
+}
+
+table.dataTable.no-footer {
+  border-bottom: none !important;
+}
+
+div.dt-container div.dt-layout-cell {
+  padding: 0 !important;
+}
+
+.dt-empty {
+  text-align: center;
+  padding: 40px !important;
+  color: var(--text-muted) !important;
+}

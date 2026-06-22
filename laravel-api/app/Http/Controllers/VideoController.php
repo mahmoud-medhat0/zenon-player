@@ -6,6 +6,7 @@ use App\Models\Video;
 use App\Services\BunnyVideoStatusService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Yajra\DataTables\Facades\DataTables;
 use OpenApi\Attributes as OA;
 
 #[OA\Info(version: "1.0.0", title: "Stream Video Platform Mobile API")]
@@ -15,64 +16,37 @@ class VideoController extends Controller
 {
     public function index(Request $request, BunnyVideoStatusService $bunnyVideos)
     {
-        $query = Video::query();
-        
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where('title', 'like', "%{$search}%");
-        }
-
-        $sortBy = $request->input('sort_by', 'created_at');
-        $sortDir = $request->input('sort_dir', 'desc');
-        
-        $allowedSorts = ['title', 'status', 'duration_seconds', 'views', 'created_at'];
-        if (in_array($sortBy, $allowedSorts)) {
-            $query->orderBy($sortBy, $sortDir === 'asc' ? 'asc' : 'desc');
-        } else {
-            $query->latest();
-        }
-
-        $perPage = (int) $request->input('per_page', 20);
-        // Cap per_page to a reasonable number
-        if ($perPage > 100) $perPage = 100;
-        
-        $videos = $query->paginate($perPage);
-        
         // Real-time Bunny Stream Sync (Lazy check on dashboard load/poll)
-        foreach ($videos as $video) {
-            if ($video->status === 'processing' && $video->bunny_video_id) {
-                $bunnyVideos->syncFromBunny($video);
-            }
+        // Sync all processing videos instead of just the paginated ones
+        $processingVideos = Video::where('status', 'processing')->whereNotNull('bunny_video_id')->get();
+        foreach ($processingVideos as $video) {
+            $bunnyVideos->syncFromBunny($video);
         }
 
-        $videos->getCollection()->transform(function($video) {
-            $thumbnail = null;
-            if ($video->cloudflare_uid) {
-                $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
-                $thumbnail = "https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
-            } elseif ($video->bunny_video_id) {
-                $bunnyDomain = config('video.bunny.pull_zone');
-                $thumbnail = "https://{$bunnyDomain}/{$video->bunny_video_id}/thumbnail.jpg";
-            } elseif ($video->status === 'ready') {
-                $thumbnail = url("/api/videos/{$video->id}/thumbnail");
-            }
+        $query = Video::query();
 
-            return [
-                'id' => $video->id,
-                'title' => $video->title,
-                'status' => $video->status,
-                'views' => $video->views,
-                'date' => $video->created_at->diffForHumans(),
-                'created_at' => $video->created_at->toISOString(),
-                'duration' => $video->duration_seconds ? gmdate($video->duration_seconds >= 3600 ? "H:i:s" : "i:s", $video->duration_seconds) : '--:--',
-                'thumbnail' => $thumbnail,
-            ];
-        });
-
-        $responseData = $videos->toArray();
-        $responseData['processing_count'] = Video::where('status', 'processing')->count();
-
-        return response()->json($responseData);
+        return DataTables::of($query)
+            ->addColumn('thumbnail', function($video) {
+                $thumbnail = null;
+                if ($video->cloudflare_uid) {
+                    $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
+                    $thumbnail = "https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
+                } elseif ($video->bunny_video_id) {
+                    $bunnyDomain = config('video.bunny.pull_zone');
+                    $thumbnail = "https://{$bunnyDomain}/{$video->bunny_video_id}/thumbnail.jpg";
+                } elseif ($video->status === 'ready') {
+                    $thumbnail = url("/api/videos/{$video->id}/thumbnail");
+                }
+                return $thumbnail;
+            })
+            ->addColumn('date', function($video) {
+                return $video->created_at->diffForHumans();
+            })
+            ->addColumn('duration', function($video) {
+                return $video->duration_seconds ? gmdate($video->duration_seconds >= 3600 ? "H:i:s" : "i:s", $video->duration_seconds) : '--:--';
+            })
+            ->with('processing_count', Video::where('status', 'processing')->count())
+            ->make(true);
     }
 
     #[OA\Get(path: "/public/videos/{id}", summary: "Get public video metadata and tenant branding", tags: ["Mobile App Integration"])]

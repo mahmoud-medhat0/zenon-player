@@ -1,1 +1,0 @@
-import{t as e}from"./app-2gbMvm4L.js";import t from"./Dashboard-CsR8Rf_M.js";var n=e();function r(){return(0,n.jsx)(t,{initialTab:`settings`})}export{r as default};
