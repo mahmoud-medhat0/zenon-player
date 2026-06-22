@@ -81,6 +81,9 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
   const [isFetchingVimeo, setIsFetchingVimeo] = useState(false);
   const [vimeoSelectedVideos, setVimeoSelectedVideos] = useState<string[]>([]);
   const [isImportingVimeo, setIsImportingVimeo] = useState(false);
+  const [vimeoPage, setVimeoPage] = useState(1);
+  const [vimeoHasMore, setVimeoHasMore] = useState(false);
+  const [isLoadingMoreVimeo, setIsLoadingMoreVimeo] = useState(false);
 
   // API Token State
   const [apiTokens, setApiTokens] = useState<any[]>([]);
@@ -439,16 +442,68 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
       const res = await axios.get('/api/vimeo/videos', {
         params: {
           vimeo_access_token: vimeoToken || undefined,
-          save_token: true
+          save_token: true,
+          page: 1
         }
       });
       setVimeoVideos(res.data.videos);
+      setVimeoHasMore(res.data.has_more);
+      setVimeoPage(1);
       setVimeoSelectedVideos([]);
       setIsVimeoModalOpen(true);
     } catch (err: any) {
       showError(t('dashboard.toasts.vimeoFetchFailed'), err.response?.data?.message || t('dashboard.toasts.vimeoFetchHint'));
     } finally {
       setIsFetchingVimeo(false);
+    }
+  };
+
+  const loadMoreVimeoVideos = async () => {
+    setIsLoadingMoreVimeo(true);
+    try {
+      const nextPage = vimeoPage + 1;
+      const res = await axios.get('/api/vimeo/videos', {
+        params: {
+          vimeo_access_token: vimeoToken || undefined,
+          page: nextPage
+        }
+      });
+      setVimeoVideos(prev => [...prev, ...res.data.videos]);
+      setVimeoHasMore(res.data.has_more);
+      setVimeoPage(nextPage);
+    } catch (err: any) {
+      showError(t('dashboard.toasts.vimeoFetchFailed'), err.response?.data?.message);
+    } finally {
+      setIsLoadingMoreVimeo(false);
+    }
+  };
+
+  const loadAllVimeoVideos = async () => {
+    setIsLoadingMoreVimeo(true);
+    try {
+      let currentPage = vimeoPage;
+      let hasMore = vimeoHasMore;
+      const allNewVideos: any[] = [];
+      
+      while (hasMore) {
+        currentPage++;
+        const res = await axios.get('/api/vimeo/videos', {
+          params: {
+            vimeo_access_token: vimeoToken || undefined,
+            page: currentPage
+          }
+        });
+        allNewVideos.push(...res.data.videos);
+        hasMore = res.data.has_more;
+      }
+      
+      setVimeoVideos(prev => [...prev, ...allNewVideos]);
+      setVimeoHasMore(false);
+      setVimeoPage(currentPage);
+    } catch (err: any) {
+      showError(t('dashboard.toasts.vimeoFetchFailed'), err.response?.data?.message);
+    } finally {
+      setIsLoadingMoreVimeo(false);
     }
   };
 
@@ -1583,8 +1638,13 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
                     )}
                   </div>
                   <div style={{ padding: '12px' }}>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {video.title}
+                    <div 
+                      className="video-title" 
+                      style={{ fontSize: '14px', margin: 0 }} 
+                      dir="auto" 
+                      title={video.title}
+                    >
+                      {video.title || 'Untitled Video'}
                     </div>
                   </div>
                 </div>
@@ -1592,6 +1652,24 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
               {vimeoVideos.length === 0 && (
                 <div style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
                   {t('dashboard.settings.vimeo.noVideos')}
+                </div>
+              )}
+              {vimeoHasMore && (
+                <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'center', gap: '16px', padding: '20px' }}>
+                  <button 
+                    onClick={loadMoreVimeoVideos} 
+                    disabled={isLoadingMoreVimeo}
+                    style={{ padding: '8px 24px', borderRadius: '24px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    {isLoadingMoreVimeo ? t('common.loading') : t('common.loadMore', 'Load More')}
+                  </button>
+                  <button 
+                    onClick={loadAllVimeoVideos} 
+                    disabled={isLoadingMoreVimeo}
+                    style={{ padding: '8px 24px', borderRadius: '24px', border: '1px solid var(--primary)', background: 'transparent', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    {isLoadingMoreVimeo ? t('common.loading') : 'Load All Pages'}
+                  </button>
                 </div>
               )}
             </div>

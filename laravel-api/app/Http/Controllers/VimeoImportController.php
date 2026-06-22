@@ -27,7 +27,7 @@ class VimeoImportController extends Controller
         $response = Http::withToken($vimeoToken)
             ->get("https://api.vimeo.com/me/videos", [
                 'page' => $page,
-                'per_page' => 20,
+                'per_page' => 100,
                 'fields' => 'uri,name,duration,files,pictures',
             ]);
 
