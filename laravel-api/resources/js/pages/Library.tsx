@@ -257,16 +257,28 @@ export default function Library() {
         <DataTable
           ajax={async (data: any, callback: any) => {
             try {
-              const res = await axios.get('/api/videos', {
-                params: {
-                  draw: data.draw,
-                  start: data.start,
-                  length: data.length,
-                  search: data.search.value,
-                  order: data.order,
-                  columns: data.columns
-                }
+              const params = new URLSearchParams();
+              params.append('draw', data.draw);
+              params.append('start', data.start);
+              params.append('length', data.length);
+              params.append('search[value]', data.search.value || '');
+              params.append('search[regex]', data.search.regex ? 'true' : 'false');
+              
+              if (data.order && data.order.length > 0) {
+                params.append('order[0][column]', data.order[0].column);
+                params.append('order[0][dir]', data.order[0].dir);
+              }
+
+              data.columns.forEach((col: any, index: number) => {
+                params.append(`columns[${index}][data]`, col.data);
+                params.append(`columns[${index}][name]`, col.name || '');
+                params.append(`columns[${index}][searchable]`, col.searchable ? 'true' : 'false');
+                params.append(`columns[${index}][orderable]`, col.orderable ? 'true' : 'false');
+                params.append(`columns[${index}][search][value]`, col.search.value || '');
+                params.append(`columns[${index}][search][regex]`, col.search.regex ? 'true' : 'false');
               });
+
+              const res = await axios.get('/api/videos?' + params.toString());
               
               setVideos(res.data.data);
               if (res.data.processing_count !== undefined) {
