@@ -247,8 +247,9 @@ export default function Settings() {
   const handleImportVimeoVideos = async () => {
     setIsImportingVimeo(true);
     try {
+      const selectedVideosData = vimeoVideos.filter(v => vimeoSelectedVideos.includes(v.id));
       await axios.post('/api/vimeo/import', {
-        video_ids: vimeoSelectedVideos
+        videos: selectedVideosData
       });
       setIsVimeoModalOpen(false);
       showSuccess(t('dashboard.toasts.vimeoImportStarted'));
