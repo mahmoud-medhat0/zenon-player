@@ -1607,7 +1607,8 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
               </div>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px', paddingRight: '8px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px', gridAutoRows: 'max-content' }}>
               {vimeoVideos.map(video => (
                 <div 
                   key={video.id} 
@@ -1672,6 +1673,7 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
                   </button>
                 </div>
               )}
+              </div>
             </div>
 
             <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
