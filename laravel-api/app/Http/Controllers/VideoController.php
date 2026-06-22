@@ -293,7 +293,7 @@ class VideoController extends Controller
             return redirect("https://{$cfDomain}/{$video->cloudflare_uid}/manifest/video.m3u8");
         } elseif ($video->bunny_video_id && basename($file) === 'playlist.m3u8') {
             $bunnyDomain = config('video.bunny.pull_zone');
-            return redirect($this->getBunnyStreamUrl($video->bunny_video_id, $bunnyDomain));
+            return redirect($this->getBunnySignedUrl($video->bunny_video_id, $bunnyDomain));
         }
 
         $file = basename($file);

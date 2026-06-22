@@ -182,6 +182,7 @@ export default function Library() {
     { 
       data: 'title', 
       title: t('dashboard.library.table.video', 'Video'),
+      width: '40%',
       render: (data: any, type: any, row: any) => `
         <div style="display: flex; align-items: center; gap: 16px; cursor: pointer" data-action="play" data-id="${row.id}">
           <div style="width: 120px; height: 68px; border-radius: 8px; overflow: hidden; background: #000; position: relative; flex-shrink: 0">
@@ -203,19 +204,21 @@ export default function Library() {
     {
       data: 'status',
       title: t('dashboard.library.table.status', 'Status'),
+      width: '15%',
       render: (data: any) => {
         if (data === 'ready') return `<span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2)"><span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981"></span> ${t('dashboard.library.ready', 'Ready')}</span>`;
         if (data === 'processing') return `<span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2)"><span style="width: 6px; height: 6px; border-radius: 50%; background: #818cf8; animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite"></span> ${t('dashboard.library.processing', 'Processing')}</span>`;
         return `<span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2)"><span style="width: 6px; height: 6px; border-radius: 50%; background: #ef4444"></span> ${t('dashboard.library.failed', 'Failed')}</span>`;
       }
     },
-    { data: 'duration', title: t('dashboard.library.table.duration', 'Duration') },
-    { data: 'views', title: t('dashboard.library.table.views', 'Views') },
-    { data: 'date', title: t('dashboard.library.table.date', 'Date') },
+    { data: 'duration', title: t('dashboard.library.table.duration', 'Duration'), width: '10%' },
+    { data: 'views', title: t('dashboard.library.table.views', 'Views'), width: '10%' },
+    { data: 'date', title: t('dashboard.library.table.date', 'Date'), width: '15%' },
     {
       data: 'id',
       title: t('dashboard.library.table.actions', 'Actions'),
       orderable: false,
+      width: '10%',
       render: (data: any, type: any, row: any) => `
         <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px">
           ${row.status === 'ready' ? `<button data-action="copy" data-id="${row.id}" style="padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: #fff; cursor: pointer" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></button>` : ''}

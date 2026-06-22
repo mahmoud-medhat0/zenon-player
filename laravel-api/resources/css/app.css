@@ -2812,6 +2812,7 @@ body {
   width: 100% !important;
   color: var(--text-main);
   border-collapse: collapse !important;
+  table-layout: auto;
 }
 
 .vimeo-datatable thead th {
@@ -2822,6 +2823,7 @@ body {
   letter-spacing: 0.05em;
   padding: 16px 24px !important;
   font-weight: 600;
+  text-align: start !important;
 }
 
 .vimeo-datatable tbody tr {
@@ -2839,6 +2841,12 @@ body {
   vertical-align: middle;
   border: none !important;
   color: var(--text-muted);
+  text-align: start !important;
+}
+
+.vimeo-datatable thead th:last-child,
+.vimeo-datatable tbody td:last-child {
+  text-align: end !important;
 }
 
 .vimeo-datatable tbody td:first-child {
