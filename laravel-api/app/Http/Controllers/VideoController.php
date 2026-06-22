@@ -17,11 +17,8 @@ class VideoController extends Controller
     public function index(Request $request, BunnyVideoStatusService $bunnyVideos)
     {
         // Real-time Bunny Stream Sync (Lazy check on dashboard load/poll)
-        // Sync all processing videos instead of just the paginated ones
-        $processingVideos = Video::where('status', 'processing')->whereNotNull('bunny_video_id')->get();
-        foreach ($processingVideos as $video) {
-            $bunnyVideos->syncFromBunny($video);
-        }
+        // Now dispatched to a background job to avoid slowing down the AJAX datatables request.
+        \App\Jobs\SyncBunnyVideoStatuses::dispatchAfterResponse();
 
         $query = Video::query();
 
