@@ -71,7 +71,7 @@ export default function Library() {
       }
 
       if (tableApi) {
-        tableApi.ajax.reload(null, false);
+        tableApi.draw(false);
       }
       setEditingVideo(null);
       setThumbnailFile(null);
@@ -95,7 +95,7 @@ export default function Library() {
     try {
       await axios.delete(`/api/videos/${editingVideo.id}`);
       if (tableApi) {
-        tableApi.ajax.reload(null, false);
+        tableApi.draw(false);
       }
       setEditingVideo(null);
       showSuccess(t('dashboard.toasts.videoDeleted'));
@@ -134,7 +134,7 @@ export default function Library() {
             axios.delete(`/api/videos/${videoId}`)
               .then(() => {
                 showSuccess(t('dashboard.toasts.videoDeleted'));
-                if (tableApi) tableApi.ajax.reload(null, false);
+                if (tableApi) tableApi.draw(false);
               })
               .catch(err => {
                 showError(t('dashboard.toasts.videoDeleteFailed'));
@@ -158,7 +158,7 @@ export default function Library() {
     const pollVideos = async () => {
       try {
         if (tableApi) {
-          tableApi.ajax.reload(null, false);
+          tableApi.draw(false);
           const res = await axios.get('/api/videos', { params: { draw: 1, length: 1 } });
           if (res.data.processing_count !== undefined) {
             setProcessingCount(res.data.processing_count);
