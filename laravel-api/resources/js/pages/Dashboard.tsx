@@ -35,6 +35,10 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
   // Videos State
   const [videos, setVideos] = useState<any[]>([]);
   const [isLoadingVideos, setIsLoadingVideos] = useState(true);
+  const [libraryPage, setLibraryPage] = useState(1);
+  const [libraryTotal, setLibraryTotal] = useState(0);
+  const [libraryLastPage, setLibraryLastPage] = useState(1);
+  const [processingCount, setProcessingCount] = useState(0);
 
   // Upload State
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -336,10 +340,18 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
     }
   };
 
-  const fetchVideos = async () => {
+  const fetchVideos = async (page = libraryPage) => {
     try {
-      const res = await axios.get('/api/videos');
+      const res = await axios.get(`/api/videos?page=${page}`);
       setVideos(res.data.data || res.data);
+      if (res.data.current_page) {
+        setLibraryPage(res.data.current_page);
+        setLibraryTotal(res.data.total);
+        setLibraryLastPage(res.data.last_page);
+      }
+      if (res.data.processing_count !== undefined) {
+        setProcessingCount(res.data.processing_count);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -352,19 +364,29 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
 
     const pollVideos = async () => {
       try {
-        const res = await axios.get('/api/videos');
+        const res = await axios.get(`/api/videos?page=${libraryPage}`);
         const videoList = res.data.data || res.data;
         setVideos(videoList);
+        if (res.data.current_page) {
+          setLibraryTotal(res.data.total);
+          setLibraryLastPage(res.data.last_page);
+        }
+        if (res.data.processing_count !== undefined) {
+          setProcessingCount(res.data.processing_count);
+        }
         setIsLoadingVideos(false);
 
         const hasProcessing = videoList.some((v: any) => v.status === 'processing');
         if (hasProcessing && !interval) {
           interval = setInterval(async () => {
             try {
-              const pollRes = await axios.get('/api/videos');
+              const pollRes = await axios.get(`/api/videos?page=${libraryPage}`);
               const polledList = pollRes.data.data || pollRes.data;
               setVideos(polledList);
-              if (!polledList.some((v: any) => v.status === 'processing')) {
+              if (pollRes.data.processing_count !== undefined) {
+                setProcessingCount(pollRes.data.processing_count);
+              }
+              if (!polledList.some((v: any) => v.status === 'processing') && pollRes.data.processing_count === 0) {
                 clearInterval(interval);
                 interval = null;
               }
@@ -379,14 +401,14 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
       }
     };
 
-    if (user) {
+    if (activeTab === 'library') {
       pollVideos();
     }
 
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [user, uploadStatus]);
+  }, [activeTab, libraryPage]);
 
   const handleUpdateProfile = async (e: FormEvent) => {
     e.preventDefault();
@@ -791,50 +813,105 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
                   <p className="section-subtitle">{t('dashboard.library.subtitle')}</p>
                 </div>
               </div>
+              
+              {processingCount > 0 && (
+                <div style={{ padding: '16px 24px', background: 'rgba(99, 102, 241, 0.1)', border: '1px solid var(--primary)', borderRadius: '12px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2">
+                    <line x1="12" y1="2" x2="12" y2="6"></line>
+                    <line x1="12" y1="18" x2="12" y2="22"></line>
+                    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                    <line x1="2" y1="12" x2="6" y2="12"></line>
+                    <line x1="18" y1="12" x2="22" y2="12"></line>
+                    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                  </svg>
+                  <span style={{ color: 'var(--text-main)', fontWeight: 500 }}>
+                    {processingCount} video{processingCount !== 1 ? 's' : ''} currently importing or processing in the background...
+                  </span>
+                </div>
+              )}
 
-              <div className="video-grid">
+              <div style={{ width: '100%', overflowX: 'auto', background: 'rgba(255,255,255,0.02)', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
                 {isLoadingVideos ? (
-                  <div style={{ color: 'var(--text-muted)' }}>{t('dashboard.library.loading')}</div>
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>{t('dashboard.library.loading')}</div>
                 ) : videos.length === 0 ? (
-                  <div style={{ color: 'var(--text-muted)' }}>{t('dashboard.library.empty')}</div>
-                ) : videos.map((video, index) => (
-                  <div key={video.id} className="video-card" style={{ animation: `fadeIn 0.5s ease forwards ${index * 0.1}s`, opacity: 0 }}>
-                    <div className="thumbnail-wrapper">
-                      <SecureImage src={video.thumbnail} alt={video.title} className="thumbnail" />
-                      <div className="duration" style={{ backgroundColor: video.status === 'failed' ? 'rgba(239, 68, 68, 0.9)' : undefined }}>
-                        {video.status === 'ready' ? video.duration : video.status === 'failed' ? t('dashboard.library.failed') : t('dashboard.library.processing')}
-                      </div>
-                      <div className="play-overlay" onClick={() => { if (video.status === 'ready') setPlayingVideo(video.id); }}>
-                        <div className="play-icon">
-                          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>{t('dashboard.library.empty')}</div>
+                ) : (
+                  <>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          <th style={{ padding: '16px 24px', fontWeight: 600 }}>{t('dashboard.library.table.video', 'Video')}</th>
+                          <th style={{ padding: '16px 24px', fontWeight: 600 }}>{t('dashboard.library.table.status', 'Status')}</th>
+                          <th style={{ padding: '16px 24px', fontWeight: 600 }}>{t('dashboard.library.table.duration', 'Duration')}</th>
+                          <th style={{ padding: '16px 24px', fontWeight: 600 }}>{t('dashboard.library.table.views', 'Views')}</th>
+                          <th style={{ padding: '16px 24px', fontWeight: 600 }}>{t('dashboard.library.table.date', 'Date')}</th>
+                          <th style={{ padding: '16px 24px', fontWeight: 600, textAlign: 'right' }}>{t('dashboard.library.table.actions', 'Actions')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {videos.map((video, index) => (
+                          <tr key={video.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.2s', cursor: 'pointer', animation: `fadeIn 0.3s ease forwards ${index * 0.05}s`, opacity: 0 }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'} onClick={() => { if (video.status === 'ready') setPlayingVideo(video.id); }}>
+                            <td style={{ padding: '16px 24px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                <div style={{ width: '120px', height: '68px', borderRadius: '8px', overflow: 'hidden', position: 'relative', background: '#000', flexShrink: 0 }}>
+                                  <SecureImage src={video.thumbnail} alt={video.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                </div>
+                                <div style={{ fontWeight: 600, color: 'var(--text-main)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{video.title}</div>
+                              </div>
+                            </td>
+                            <td style={{ padding: '16px 24px' }}>
+                              <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 600, background: video.status === 'ready' ? 'rgba(34, 197, 94, 0.1)' : video.status === 'failed' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(99, 102, 241, 0.1)', color: video.status === 'ready' ? '#4ade80' : video.status === 'failed' ? '#f87171' : '#818cf8', textTransform: 'capitalize' }}>
+                                {video.status === 'ready' ? t('dashboard.library.ready', 'Ready') : video.status === 'failed' ? t('dashboard.library.failed') : t('dashboard.library.processing')}
+                              </span>
+                            </td>
+                            <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{video.duration || '-'}</td>
+                            <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{video.views || 0}</td>
+                            <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{formatRelativeDate(video.created_at, video.date)}</td>
+                            <td style={{ padding: '16px 24px', textAlign: 'right' }}>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setEditingVideo(video); setEditTitle(video.title); setEditPrivacy(video.privacy || 'private'); }}
+                                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px' }}
+                                onMouseOver={e => e.currentTarget.style.color = 'var(--text-main)'}
+                                onMouseOut={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                              >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    
+                    {libraryTotal > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderTop: '1px solid var(--border-color)' }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+                          {t('dashboard.library.table.showing', 'Showing')} {((libraryPage - 1) * 20) + 1} {t('dashboard.library.table.to', 'to')} {Math.min(libraryPage * 20, libraryTotal)} {t('dashboard.library.table.of', 'of')} {libraryTotal} {t('dashboard.library.table.videos', 'videos')}
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button 
+                            onClick={() => fetchVideos(libraryPage - 1)}
+                            disabled={libraryPage === 1}
+                            style={{ padding: '6px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', background: libraryPage === 1 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)', color: libraryPage === 1 ? 'var(--text-muted)' : 'var(--text-main)', cursor: libraryPage === 1 ? 'not-allowed' : 'pointer', fontWeight: 500, transition: 'all 0.2s' }}
+                          >
+                            {t('dashboard.library.table.previous', 'Previous')}
+                          </button>
+                          <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', color: 'var(--text-main)', fontWeight: 600 }}>
+                            {libraryPage} / {libraryLastPage}
+                          </div>
+                          <button 
+                            onClick={() => fetchVideos(libraryPage + 1)}
+                            disabled={libraryPage === libraryLastPage}
+                            style={{ padding: '6px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', background: libraryPage === libraryLastPage ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)', color: libraryPage === libraryLastPage ? 'var(--text-muted)' : 'var(--text-main)', cursor: libraryPage === libraryLastPage ? 'not-allowed' : 'pointer', fontWeight: 500, transition: 'all 0.2s' }}
+                          >
+                            {t('dashboard.library.table.next', 'Next')}
+                          </button>
                         </div>
                       </div>
-                    </div>
-                    <div className="video-info">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <h3 className="video-title">{video.title}</h3>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setEditingVideo(video); setEditTitle(video.title); setEditPrivacy(video.privacy || 'private'); }}
-                          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
-                          onMouseOver={e => e.currentTarget.style.color = 'var(--text-main)'}
-                          onMouseOut={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                        >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
-                        </button>
-                      </div>
-                      <div className="video-meta">
-                        <div className="meta-item">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                          {video.views}
-                        </div>
-                        <div className="meta-item">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                          {formatRelativeDate(video.created_at, video.date)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    )}
+                  </>
+                )}
               </div>
             </>
           )}

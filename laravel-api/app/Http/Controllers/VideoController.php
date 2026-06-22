@@ -48,7 +48,10 @@ class VideoController extends Controller
             ];
         });
 
-        return response()->json($videos);
+        $responseData = $videos->toArray();
+        $responseData['processing_count'] = Video::where('status', 'processing')->count();
+
+        return response()->json($responseData);
     }
 
     #[OA\Get(path: "/public/videos/{id}", summary: "Get public video metadata and tenant branding", tags: ["Mobile App Integration"])]
