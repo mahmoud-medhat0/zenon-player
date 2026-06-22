@@ -15,7 +15,28 @@ class VideoController extends Controller
 {
     public function index(Request $request, BunnyVideoStatusService $bunnyVideos)
     {
-        $videos = Video::latest()->paginate(20);
+        $query = Video::query();
+        
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where('title', 'like', "%{$search}%");
+        }
+
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortDir = $request->input('sort_dir', 'desc');
+        
+        $allowedSorts = ['title', 'status', 'duration_seconds', 'views', 'created_at'];
+        if (in_array($sortBy, $allowedSorts)) {
+            $query->orderBy($sortBy, $sortDir === 'asc' ? 'asc' : 'desc');
+        } else {
+            $query->latest();
+        }
+
+        $perPage = (int) $request->input('per_page', 20);
+        // Cap per_page to a reasonable number
+        if ($perPage > 100) $perPage = 100;
+        
+        $videos = $query->paginate($perPage);
         
         // Real-time Bunny Stream Sync (Lazy check on dashboard load/poll)
         foreach ($videos as $video) {

@@ -39,6 +39,22 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
   const [libraryTotal, setLibraryTotal] = useState(0);
   const [libraryLastPage, setLibraryLastPage] = useState(1);
   const [processingCount, setProcessingCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [perPage, setPerPage] = useState(20);
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setLibraryPage(1);
+  }, [debouncedSearchQuery, perPage, sortBy, sortDir]);
 
   // Upload State
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -340,9 +356,17 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
     }
   };
 
-  const fetchVideos = async (page = libraryPage) => {
+  const fetchVideos = async (page = libraryPage, currentSearch = debouncedSearchQuery, currentPerPage = perPage, currentSortBy = sortBy, currentSortDir = sortDir) => {
     try {
-      const res = await axios.get(`/api/videos?page=${page}`);
+      const res = await axios.get('/api/videos', {
+        params: {
+          page,
+          search: currentSearch,
+          per_page: currentPerPage,
+          sort_by: currentSortBy,
+          sort_dir: currentSortDir
+        }
+      });
       setVideos(res.data.data || res.data);
       if (res.data.current_page) {
         setLibraryPage(res.data.current_page);
@@ -364,7 +388,9 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
 
     const pollVideos = async () => {
       try {
-        const res = await axios.get(`/api/videos?page=${libraryPage}`);
+        const res = await axios.get('/api/videos', {
+          params: { page: libraryPage, search: debouncedSearchQuery, per_page: perPage, sort_by: sortBy, sort_dir: sortDir }
+        });
         const videoList = res.data.data || res.data;
         setVideos(videoList);
         if (res.data.current_page) {
@@ -380,7 +406,9 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
         if (hasProcessing && !interval) {
           interval = setInterval(async () => {
             try {
-              const pollRes = await axios.get(`/api/videos?page=${libraryPage}`);
+              const pollRes = await axios.get('/api/videos', {
+                params: { page: libraryPage, search: debouncedSearchQuery, per_page: perPage, sort_by: sortBy, sort_dir: sortDir }
+              });
               const polledList = pollRes.data.data || pollRes.data;
               setVideos(polledList);
               if (pollRes.data.processing_count !== undefined) {
@@ -408,7 +436,7 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [activeTab, libraryPage]);
+  }, [activeTab, libraryPage, debouncedSearchQuery, perPage, sortBy, sortDir]);
 
   const handleUpdateProfile = async (e: FormEvent) => {
     e.preventDefault();
@@ -658,6 +686,73 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
     }
   };
 
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortDir('asc');
+    }
+  };
+
+  const getSortIcon = (column: string) => {
+    if (sortBy !== column) return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.3" style={{ marginLeft: '4px' }}><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>;
+    return sortDir === 'asc' 
+      ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: '4px' }}><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: '4px' }}><path d="M12 5v14M5 12l7 7 7-7"/></svg>;
+  };
+
+  const renderPagination = () => {
+    const pages = [];
+    const maxVisible = 5;
+    
+    let startPage = Math.max(1, libraryPage - Math.floor(maxVisible / 2));
+    let endPage = startPage + maxVisible - 1;
+    
+    if (endPage > libraryLastPage) {
+      endPage = libraryLastPage;
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    if (startPage > 1) {
+      pages.push(
+        <button key="1" onClick={() => { setLibraryPage(1); fetchVideos(1); }} style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 500, transition: 'all 0.2s', cursor: 'pointer' }}>1</button>
+      );
+      if (startPage > 2) {
+        pages.push(<span key="ellipsis1" style={{ color: 'var(--text-muted)', padding: '0 4px' }}>...</span>);
+      }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <button
+          key={i}
+          onClick={() => { setLibraryPage(i); fetchVideos(i); }}
+          style={{ 
+            width: '32px', height: '32px', borderRadius: '8px', 
+            background: libraryPage === i ? 'var(--primary)' : 'rgba(255,255,255,0.05)', 
+            color: libraryPage === i ? '#fff' : 'var(--text-main)', 
+            border: '1px solid', borderColor: libraryPage === i ? 'var(--primary)' : 'var(--border-color)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 500, transition: 'all 0.2s', cursor: 'pointer'
+          }}
+        >
+          {i}
+        </button>
+      );
+    }
+
+    if (endPage < libraryLastPage) {
+      if (endPage < libraryLastPage - 1) {
+        pages.push(<span key="ellipsis2" style={{ color: 'var(--text-muted)', padding: '0 4px' }}>...</span>);
+      }
+      pages.push(
+        <button key={libraryLastPage} onClick={() => { setLibraryPage(libraryLastPage); fetchVideos(libraryLastPage); }} style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 500, transition: 'all 0.2s', cursor: 'pointer' }}>{libraryLastPage}</button>
+      );
+    }
+
+    return pages;
+  };
+
   if (!user) {
     return null;
   }
@@ -832,6 +927,37 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
                 </div>
               )}
 
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>{t('dashboard.library.table.show', 'Show')}</span>
+                  <select 
+                    value={perPage} 
+                    onChange={e => {
+                      const val = Number(e.target.value);
+                      setPerPage(val);
+                    }}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '6px', padding: '6px 12px', outline: 'none' }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>{t('dashboard.library.table.entries', 'entries')}</span>
+                </div>
+                
+                <div style={{ position: 'relative' }}>
+                  <svg style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input 
+                    type="text" 
+                    placeholder={t('dashboard.library.table.search', 'Search videos...')} 
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '8px', padding: '8px 16px 8px 36px', outline: 'none', minWidth: '250px' }}
+                  />
+                </div>
+              </div>
+
               <div style={{ width: '100%', overflowX: 'auto', background: 'rgba(255,255,255,0.02)', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
                 {isLoadingVideos ? (
                   <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>{t('dashboard.library.loading')}</div>
@@ -842,11 +968,21 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          <th style={{ padding: '16px 24px', fontWeight: 600 }}>{t('dashboard.library.table.video', 'Video')}</th>
-                          <th style={{ padding: '16px 24px', fontWeight: 600 }}>{t('dashboard.library.table.status', 'Status')}</th>
-                          <th style={{ padding: '16px 24px', fontWeight: 600 }}>{t('dashboard.library.table.duration', 'Duration')}</th>
-                          <th style={{ padding: '16px 24px', fontWeight: 600 }}>{t('dashboard.library.table.views', 'Views')}</th>
-                          <th style={{ padding: '16px 24px', fontWeight: 600 }}>{t('dashboard.library.table.date', 'Date')}</th>
+                          <th onClick={() => handleSort('title')} style={{ padding: '16px 24px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                            <div style={{ display: 'flex', alignItems: 'center' }}>{t('dashboard.library.table.video', 'Video')} {getSortIcon('title')}</div>
+                          </th>
+                          <th onClick={() => handleSort('status')} style={{ padding: '16px 24px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                            <div style={{ display: 'flex', alignItems: 'center' }}>{t('dashboard.library.table.status', 'Status')} {getSortIcon('status')}</div>
+                          </th>
+                          <th onClick={() => handleSort('duration_seconds')} style={{ padding: '16px 24px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                            <div style={{ display: 'flex', alignItems: 'center' }}>{t('dashboard.library.table.duration', 'Duration')} {getSortIcon('duration_seconds')}</div>
+                          </th>
+                          <th onClick={() => handleSort('views')} style={{ padding: '16px 24px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                            <div style={{ display: 'flex', alignItems: 'center' }}>{t('dashboard.library.table.views', 'Views')} {getSortIcon('views')}</div>
+                          </th>
+                          <th onClick={() => handleSort('created_at')} style={{ padding: '16px 24px', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                            <div style={{ display: 'flex', alignItems: 'center' }}>{t('dashboard.library.table.date', 'Date')} {getSortIcon('created_at')}</div>
+                          </th>
                           <th style={{ padding: '16px 24px', fontWeight: 600, textAlign: 'right' }}>{t('dashboard.library.table.actions', 'Actions')}</th>
                         </tr>
                       </thead>
@@ -887,23 +1023,23 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
                     {libraryTotal > 0 && (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderTop: '1px solid var(--border-color)' }}>
                         <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-                          {t('dashboard.library.table.showing', 'Showing')} {((libraryPage - 1) * 20) + 1} {t('dashboard.library.table.to', 'to')} {Math.min(libraryPage * 20, libraryTotal)} {t('dashboard.library.table.of', 'of')} {libraryTotal} {t('dashboard.library.table.videos', 'videos')}
+                          {t('dashboard.library.table.showing', 'Showing')} {((libraryPage - 1) * perPage) + 1} {t('dashboard.library.table.to', 'to')} {Math.min(libraryPage * perPage, libraryTotal)} {t('dashboard.library.table.of', 'of')} {libraryTotal} {t('dashboard.library.table.entries', 'entries')}
                         </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '4px' }}>
                           <button 
-                            onClick={() => fetchVideos(libraryPage - 1)}
+                            onClick={() => { setLibraryPage(libraryPage - 1); fetchVideos(libraryPage - 1); }}
                             disabled={libraryPage === 1}
-                            style={{ padding: '6px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', background: libraryPage === 1 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)', color: libraryPage === 1 ? 'var(--text-muted)' : 'var(--text-main)', cursor: libraryPage === 1 ? 'not-allowed' : 'pointer', fontWeight: 500, transition: 'all 0.2s' }}
+                            style={{ padding: '6px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', background: libraryPage === 1 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)', color: libraryPage === 1 ? 'var(--text-muted)' : 'var(--text-main)', cursor: libraryPage === 1 ? 'not-allowed' : 'pointer', fontWeight: 500, transition: 'all 0.2s', marginRight: '4px' }}
                           >
                             {t('dashboard.library.table.previous', 'Previous')}
                           </button>
-                          <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', color: 'var(--text-main)', fontWeight: 600 }}>
-                            {libraryPage} / {libraryLastPage}
-                          </div>
+                          
+                          {renderPagination()}
+
                           <button 
-                            onClick={() => fetchVideos(libraryPage + 1)}
+                            onClick={() => { setLibraryPage(libraryPage + 1); fetchVideos(libraryPage + 1); }}
                             disabled={libraryPage === libraryLastPage}
-                            style={{ padding: '6px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', background: libraryPage === libraryLastPage ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)', color: libraryPage === libraryLastPage ? 'var(--text-muted)' : 'var(--text-main)', cursor: libraryPage === libraryLastPage ? 'not-allowed' : 'pointer', fontWeight: 500, transition: 'all 0.2s' }}
+                            style={{ padding: '6px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', background: libraryPage === libraryLastPage ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)', color: libraryPage === libraryLastPage ? 'var(--text-muted)' : 'var(--text-main)', cursor: libraryPage === libraryLastPage ? 'not-allowed' : 'pointer', fontWeight: 500, transition: 'all 0.2s', marginLeft: '4px' }}
                           >
                             {t('dashboard.library.table.next', 'Next')}
                           </button>
