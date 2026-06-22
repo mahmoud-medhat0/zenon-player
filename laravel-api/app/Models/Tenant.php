@@ -20,6 +20,7 @@ class Tenant extends Model
         'allowed_domains',
         'webhook_url',
         'webhook_secret',
+        'vimeo_access_token',
     ];
 
     protected function casts(): array
@@ -27,6 +28,7 @@ class Tenant extends Model
         return [
             'is_active' => 'boolean',
             'allowed_domains' => 'array',
+            'vimeo_access_token' => 'encrypted',
         ];
     }
 

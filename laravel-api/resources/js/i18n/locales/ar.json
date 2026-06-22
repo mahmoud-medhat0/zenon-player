@@ -134,6 +134,24 @@
         "communityTitle": "منتدى المجتمع",
         "communityDesc": "العثور على إجابات والتواصل مع مبدعين آخرين.",
         "visitForums": "زيارة المنتديات"
+      },
+      "vimeo": {
+        "title": "دمج ڤيميو (Vimeo)",
+        "desc": "استيراد فيديوهاتك مباشرة من حسابك في Vimeo.",
+        "token": "رمز الوصول الخاص بـ Vimeo",
+        "tokenPlaceholder": "أدخل رمز الوصول الخاص بك (اتركه فارغاً إذا كان محفوظاً)",
+        "scopeWarning": "يجب أن يحتوي الرمز على صلاحية `video_files` للحصول على روابط MP4 المباشرة (يتطلب حساب Pro+).",
+        "fetching": "جاري جلب الفيديوهات...",
+        "fetchBtn": "جلب فيديوهات Vimeo",
+        "modalTitle": "اختر فيديوهات Vimeo",
+        "modalDesc": "اختر الفيديوهات التي ترغب في استيرادها إلى مكتبتك.",
+        "deselectAll": "إلغاء تحديد الكل",
+        "selectAll": "تحديد الكل",
+        "selectedCount": "{{count}} محدد",
+        "noThumb": "بدون صورة",
+        "noVideos": "لم يتم العثور على فيديوهات بروابط MP4 المباشرة. تأكد من أن الرمز يحتوي على صلاحية 'video_files' وأن لديك حساب Pro+.",
+        "importing": "جاري الاستيراد...",
+        "importBtn": "استيراد {{count}} فيديوهات"
       }
     },
     "team": {
@@ -201,7 +219,10 @@
       "confirmDeleteVideo": "هل أنت متأكد من حذف هذا الفيديو؟ لا يمكن التراجع.",
       "deleteVideoTitle": "حذف الفيديو؟",
       "confirmRevokeToken": "هل أنت متأكد من إلغاء هذا الرمز؟",
-      "confirmRemoveMember": "هل أنت متأكد من إزالة هذا العضو؟"
+      "confirmRemoveMember": "هل أنت متأكد من إزالة هذا العضو؟",
+      "vimeoFetchFailed": "فشل جلب الفيديوهات",
+      "vimeoFetchHint": "تأكد من رمز الوصول وحاول مرة أخرى.",
+      "vimeoImportFailed": "فشل الاستيراد"
     }
   },
   "admin": {

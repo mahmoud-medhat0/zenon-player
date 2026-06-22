@@ -74,6 +74,14 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
   const [settingsLogoUrl, setSettingsLogoUrl] = useState('');
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
 
+  // Vimeo Integration State
+  const [vimeoToken, setVimeoToken] = useState('');
+  const [vimeoVideos, setVimeoVideos] = useState<any[]>([]);
+  const [isVimeoModalOpen, setIsVimeoModalOpen] = useState(false);
+  const [isFetchingVimeo, setIsFetchingVimeo] = useState(false);
+  const [vimeoSelectedVideos, setVimeoSelectedVideos] = useState<string[]>([]);
+  const [isImportingVimeo, setIsImportingVimeo] = useState(false);
+
   // API Token State
   const [apiTokens, setApiTokens] = useState<any[]>([]);
   const [newApiTokenName, setNewApiTokenName] = useState('');
@@ -422,6 +430,51 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
     } finally {
       setIsUpdatingSettings(false);
     }
+  };
+
+  const fetchVimeoVideos = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
+    setIsFetchingVimeo(true);
+    try {
+      const res = await axios.get('/api/vimeo/videos', {
+        params: {
+          vimeo_access_token: vimeoToken || undefined,
+          save_token: true
+        }
+      });
+      setVimeoVideos(res.data.videos);
+      setVimeoSelectedVideos([]);
+      setIsVimeoModalOpen(true);
+    } catch (err: any) {
+      showError(t('dashboard.toasts.vimeoFetchFailed'), err.response?.data?.message || t('dashboard.toasts.vimeoFetchHint'));
+    } finally {
+      setIsFetchingVimeo(false);
+    }
+  };
+
+  const handleImportVimeoVideos = async () => {
+    if (vimeoSelectedVideos.length === 0) return;
+    setIsImportingVimeo(true);
+    
+    const videosToImport = vimeoVideos.filter(v => vimeoSelectedVideos.includes(v.id));
+    
+    try {
+      const res = await axios.post('/api/vimeo/import', { videos: videosToImport });
+      showSuccess(res.data.message);
+      setIsVimeoModalOpen(false);
+      setVimeoSelectedVideos([]);
+      navigateToTab('library'); // Take them to library to see the processing videos
+    } catch (err: any) {
+      showError(t('dashboard.toasts.vimeoImportFailed'), err.response?.data?.message);
+    } finally {
+      setIsImportingVimeo(false);
+    }
+  };
+
+  const toggleVimeoSelection = (id: string) => {
+    setVimeoSelectedVideos(prev => 
+      prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]
+    );
   };
 
   const handleUpdatePassword = async (e: FormEvent) => {
@@ -1100,6 +1153,45 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
                   </div>
                 )}
 
+                {/* Vimeo Integration */}
+                <div className="settings-glass-card">
+                  <div className="settings-card-header">
+                    <div className="settings-icon-wrapper" style={{ color: '#0ea5e9', background: 'rgba(14, 165, 233, 0.1)' }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="settings-card-title">{t('dashboard.settings.vimeo.title')}</h3>
+                      <p className="settings-card-subtitle">{t('dashboard.settings.vimeo.desc')}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="settings-danger-content">
+                    <form onSubmit={fetchVimeoVideos} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div className="settings-field" style={{ marginBottom: 0 }}>
+                        <label className="settings-label">{t('dashboard.settings.vimeo.token')}</label>
+                        <input
+                          type="password"
+                          className="settings-input"
+                          placeholder={t('dashboard.settings.vimeo.tokenPlaceholder')}
+                          value={vimeoToken}
+                          onChange={e => setVimeoToken(e.target.value)}
+                          disabled={isFetchingVimeo}
+                        />
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>{t('dashboard.settings.vimeo.scopeWarning')}</p>
+                      </div>
+
+                      <div className="settings-actions" style={{ marginTop: '8px' }}>
+                        <button type="submit" className="btn-settings-save" disabled={isFetchingVimeo} style={{ width: '100%' }}>
+                          {isFetchingVimeo ? t('dashboard.settings.vimeo.fetching') : t('dashboard.settings.vimeo.fetchBtn')}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+
                 {/* Danger Zone */}
                 <div className="settings-glass-card settings-card-danger">
                   <div className="settings-card-header">
@@ -1433,6 +1525,95 @@ export default function Dashboard({ initialTab }: { initialTab?: DashboardTab } 
           onClose={() => setPlayingVideo(null)}
           primaryColor={(user?.tenant as any)?.primary_color || '#4f46e5'}
         />
+      )}
+      {/* Vimeo Import Modal */}
+      {isVimeoModalOpen && (
+        <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 50 }}>
+          <div className="auth-card animate-fade-in" style={{ width: '100%', maxWidth: '800px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: '40px', position: 'relative' }}>
+            <button
+              onClick={() => setIsVimeoModalOpen(false)}
+              style={{ position: 'absolute', top: '16px', right: '16px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px' }}
+              aria-label={t('common.close')}
+            >
+              <X size={20} />
+            </button>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '8px' }}>{t('dashboard.settings.vimeo.modalTitle')}</h2>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>{t('dashboard.settings.vimeo.modalDesc')}</p>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <button 
+                onClick={() => setVimeoSelectedVideos(vimeoSelectedVideos.length === vimeoVideos.length ? [] : vimeoVideos.map(v => v.id))}
+                style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-main)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}
+              >
+                {vimeoSelectedVideos.length === vimeoVideos.length ? t('dashboard.settings.vimeo.deselectAll') : t('dashboard.settings.vimeo.selectAll')}
+              </button>
+              <div style={{ color: 'var(--text-main)', fontWeight: 600 }}>
+                {t('dashboard.settings.vimeo.selectedCount', { count: vimeoSelectedVideos.length })}
+              </div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px', paddingRight: '8px' }}>
+              {vimeoVideos.map(video => (
+                <div 
+                  key={video.id} 
+                  onClick={() => toggleVimeoSelection(video.id)}
+                  style={{ 
+                    border: `2px solid ${vimeoSelectedVideos.includes(video.id) ? 'var(--primary)' : 'var(--border-color)'}`, 
+                    borderRadius: '12px', 
+                    overflow: 'hidden', 
+                    cursor: 'pointer',
+                    position: 'relative',
+                    transition: 'all 0.2s',
+                    background: vimeoSelectedVideos.includes(video.id) ? 'rgba(79, 70, 229, 0.05)' : 'transparent'
+                  }}
+                >
+                  <div style={{ position: 'relative', aspectRatio: '16/9', background: '#000' }}>
+                    {video.thumbnail ? (
+                      <img src={video.thumbnail} alt={video.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>{t('dashboard.settings.vimeo.noThumb')}</div>
+                    )}
+                    <div style={{ position: 'absolute', bottom: '8px', right: '8px', background: 'rgba(0,0,0,0.8)', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 600 }}>
+                      {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, '0')}
+                    </div>
+                    {vimeoSelectedVideos.includes(video.id) && (
+                      <div style={{ position: 'absolute', top: '8px', right: '8px', background: 'var(--primary)', color: 'white', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ padding: '12px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {video.title}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {vimeoVideos.length === 0 && (
+                <div style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  {t('dashboard.settings.vimeo.noVideos')}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button 
+                onClick={() => setIsVimeoModalOpen(false)}
+                style={{ padding: '12px 24px', background: 'transparent', border: '1px solid var(--border-color)', borderRadius: '12px', color: 'var(--text-main)', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleImportVimeoVideos}
+                disabled={vimeoSelectedVideos.length === 0 || isImportingVimeo}
+                className="btn-primary"
+                style={{ padding: '12px 32px' }}
+              >
+                {isImportingVimeo ? t('dashboard.settings.vimeo.importing') : t('dashboard.settings.vimeo.importBtn', { count: vimeoSelectedVideos.length })}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

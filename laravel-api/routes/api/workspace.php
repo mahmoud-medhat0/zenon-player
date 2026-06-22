@@ -26,6 +26,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/settings/profile', [SettingsController::class, 'updateProfile']);
     Route::put('/settings/password', [SettingsController::class, 'updatePassword']);
     Route::put('/settings/tenant', [SettingsController::class, 'updateTenant']);
+    
+    Route::get('/vimeo/videos', [\App\Http\Controllers\VimeoImportController::class, 'getVideos']);
+    Route::post('/vimeo/import', [\App\Http\Controllers\VimeoImportController::class, 'importVideos']);
 
     Route::get('/subscription', [PlanController::class, 'subscription']);
 });

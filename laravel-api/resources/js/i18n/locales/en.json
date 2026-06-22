@@ -134,6 +134,24 @@
         "communityTitle": "Community Forum",
         "communityDesc": "Find answers and connect with other creators.",
         "visitForums": "Visit Forums"
+      },
+      "vimeo": {
+        "title": "Vimeo Integration",
+        "desc": "Import your videos directly from Vimeo.",
+        "token": "Vimeo Access Token",
+        "tokenPlaceholder": "Enter your personal access token (leave empty if already saved)",
+        "scopeWarning": "Needs `video_files` scope for direct MP4 links (requires Pro+).",
+        "fetching": "Fetching Videos...",
+        "fetchBtn": "Fetch Vimeo Videos",
+        "modalTitle": "Select Vimeo Videos",
+        "modalDesc": "Select the videos you want to import to your library.",
+        "deselectAll": "Deselect All",
+        "selectAll": "Select All",
+        "selectedCount": "{{count}} Selected",
+        "noThumb": "No Thumb",
+        "noVideos": "No videos found with MP4 links. Ensure your token has 'video_files' scope and you have a Vimeo Pro+ account.",
+        "importing": "Importing...",
+        "importBtn": "Import {{count}} Videos"
       }
     },
     "team": {
@@ -201,7 +219,10 @@
       "confirmDeleteVideo": "Are you sure you want to delete this video? This cannot be undone.",
       "deleteVideoTitle": "Delete Video?",
       "confirmRevokeToken": "Are you sure you want to revoke this token?",
-      "confirmRemoveMember": "Are you sure you want to remove this member?"
+      "confirmRemoveMember": "Are you sure you want to remove this member?",
+      "vimeoFetchFailed": "Failed to fetch videos",
+      "vimeoFetchHint": "Check your token and try again.",
+      "vimeoImportFailed": "Import failed"
     }
   },
   "admin": {

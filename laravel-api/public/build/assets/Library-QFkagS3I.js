@@ -1,0 +1,1 @@
+import{t as e}from"./app-CnfLKAqA.js";import t from"./Dashboard-DcyJkyUh.js";var n=e();function r(){return(0,n.jsx)(t,{initialTab:`library`})}export{r as default};
