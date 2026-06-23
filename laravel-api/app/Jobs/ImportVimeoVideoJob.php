@@ -59,4 +59,13 @@ class ImportVimeoVideoJob implements ShouldQueue
             'bunny_video_id' => $bunnyVideoId,
         ]);
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error("ImportVimeoVideoJob failed completely for video {$this->video->id}: " . $exception->getMessage());
+        $this->video->update(['status' => 'failed']);
+    }
 }
