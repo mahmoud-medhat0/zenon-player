@@ -48,14 +48,32 @@ class VimeoImportController extends Controller
 
             $mp4Url = null;
             $highestWidth = 0;
+            $fallbackUrl = null;
+            $fallbackWidth = PHP_INT_MAX;
+
             foreach ($files as $file) {
                 if (($file['type'] === 'video/mp4' || $file['quality'] !== 'hls') && isset($file['link']) && $file['link']) {
                     $width = $file['width'] ?? 0;
-                    if ($width > $highestWidth) {
-                        $highestWidth = $width;
-                        $mp4Url = $file['link'];
+                    
+                    // Smart fix: Cap the fetched video to 1080p (width <= 1920) 
+                    // This prevents downloading massive 4K/2K files which consume huge storage when transcoded.
+                    if ($width <= 1920) {
+                        if ($width > $highestWidth) {
+                            $highestWidth = $width;
+                            $mp4Url = $file['link'];
+                        }
+                    } else {
+                        // Keep a fallback just in case the video ONLY has > 1080p files
+                        if ($width < $fallbackWidth) {
+                            $fallbackWidth = $width;
+                            $fallbackUrl = $file['link'];
+                        }
                     }
                 }
+            }
+
+            if (!$mp4Url) {
+                $mp4Url = $fallbackUrl;
             }
 
             if (!$mp4Url) {
