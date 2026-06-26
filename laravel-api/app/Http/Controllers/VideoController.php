@@ -345,11 +345,9 @@ class VideoController extends Controller
 
         $expires = time() + 7200; // 2 hours expiration
         $path = "/{$videoId}/{$file}";
-        $userIp = request()->ip();
 
-        // Hashable string: SecurityKey + Path + Expires + UserIP
-        // Binding to UserIP ensures the URL cannot be shared/downloaded elsewhere
-        $hashableBase = $securityKey . $path . $expires . $userIp;
+        // Hashable string: SecurityKey + Path + Expires
+        $hashableBase = $securityKey . $path . $expires;
         
         $hash = hash('sha256', $hashableBase, true);
         
