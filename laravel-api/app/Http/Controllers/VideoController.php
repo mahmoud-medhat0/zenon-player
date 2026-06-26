@@ -14,6 +14,21 @@ use OpenApi\Attributes as OA;
 #[OA\SecurityScheme(securityScheme: "bearerAuth", type: "http", scheme: "bearer")]
 class VideoController extends Controller
 {
+    private function hasValidVideoToken(Video $video, ?string $token): bool
+    {
+        if (! $token) {
+            return false;
+        }
+
+        if (\Illuminate\Support\Facades\Cache::has("video_token_{$video->id}_{$token}")) {
+            return true;
+        }
+
+        $expectedToken = \Illuminate\Support\Facades\Cache::get("video_token_{$video->id}");
+
+        return $expectedToken && hash_equals($expectedToken, $token);
+    }
+
     public function index(Request $request, BunnyVideoStatusService $bunnyVideos)
     {
         // Real-time Bunny Stream Sync (Lazy check on dashboard load/poll)
@@ -75,14 +90,7 @@ class VideoController extends Controller
         }
 
         $tokenParam = request('token');
-        $hasValidToken = false;
-        
-        if ($tokenParam && $video->privacy === 'private') {
-            $expectedToken = \Illuminate\Support\Facades\Cache::get("video_token_{$video->id}");
-            if ($expectedToken && hash_equals($expectedToken, $tokenParam)) {
-                $hasValidToken = true;
-            }
-        }
+        $hasValidToken = $this->hasValidVideoToken($video, $tokenParam);
 
         if ($video->privacy === 'private' && !auth('sanctum')->check() && !$hasValidToken) {
             abort(403, 'This video is private.');
@@ -141,14 +149,7 @@ class VideoController extends Controller
         $video = Video::findOrFail($id);
 
         $tokenParam = request('token');
-        $hasValidToken = false;
-        
-        if ($tokenParam && $video->privacy === 'private') {
-            $expectedToken = \Illuminate\Support\Facades\Cache::get("video_token_{$video->id}");
-            if ($expectedToken && hash_equals($expectedToken, $tokenParam)) {
-                $hasValidToken = true;
-            }
-        }
+        $hasValidToken = $this->hasValidVideoToken($video, $tokenParam);
 
         if ($video->privacy === 'private' && !auth('sanctum')->check() && !$hasValidToken) {
             abort(403, 'This video is private.');
@@ -275,14 +276,7 @@ class VideoController extends Controller
         $video = Video::findOrFail($id);
         
         $tokenParam = request('token');
-        $hasValidToken = false;
-        
-        if ($tokenParam && $video->privacy === 'private') {
-            $expectedToken = \Illuminate\Support\Facades\Cache::get("video_token_{$video->id}");
-            if ($expectedToken && hash_equals($expectedToken, $tokenParam)) {
-                $hasValidToken = true;
-            }
-        }
+        $hasValidToken = $this->hasValidVideoToken($video, $tokenParam);
 
         if ($video->privacy === 'private' && !auth('sanctum')->check() && !$hasValidToken) {
             abort(403, 'This video is private.');
@@ -351,9 +345,11 @@ class VideoController extends Controller
 
         $expires = time() + 7200; // 2 hours expiration
         $path = "/{$videoId}/{$file}";
+        $userIp = request()->ip();
 
-        // Hashable string: SecurityKey + Path + Expires
-        $hashableBase = $securityKey . $path . $expires;
+        // Hashable string: SecurityKey + Path + Expires + UserIP
+        // Binding to UserIP ensures the URL cannot be shared/downloaded elsewhere
+        $hashableBase = $securityKey . $path . $expires . $userIp;
         
         $hash = hash('sha256', $hashableBase, true);
         
@@ -373,12 +369,11 @@ class VideoController extends Controller
         // Generate a random 32 character token
         $token = bin2hex(random_bytes(16));
 
-        // Store token in cache for 6 hours
-        \Illuminate\Support\Facades\Cache::put("video_token_{$video->id}", $token, now()->addHours(6));
+        \Illuminate\Support\Facades\Cache::put("video_token_{$video->id}_{$token}", true, now()->addMinutes(10));
 
         return response()->json([
             'token' => $token,
-            'expires_at' => now()->addHours(6)->toISOString(),
+            'expires_at' => now()->addMinutes(10)->toISOString(),
         ]);
     }
 }
