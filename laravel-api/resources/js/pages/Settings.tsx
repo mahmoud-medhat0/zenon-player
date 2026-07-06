@@ -6,7 +6,7 @@ import { showSuccess, showError } from '../utils/alerts';
 import ColorPicker from '../components/ColorPicker';
 import { useTranslation } from 'react-i18next';
 import DashboardLayout from '../layouts/DashboardLayout';
-import { X } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Copy, Loader2, X } from 'lucide-react';
 
 export default function Settings() {
   const { props } = usePage<PageProps>();
@@ -41,7 +41,12 @@ export default function Settings() {
   // API Token State
   const [apiTokens, setApiTokens] = useState<any[]>([]);
   const [newApiTokenName, setNewApiTokenName] = useState('');
+  const [newApiTokenExpiresAt, setNewApiTokenExpiresAt] = useState('');
+  const [apiTokenNeverExpires, setApiTokenNeverExpires] = useState(true);
   const [generatedToken, setGeneratedToken] = useState<string | null>(null);
+  const [apiTokenError, setApiTokenError] = useState<string | null>(null);
+  const [isCreatingApiToken, setIsCreatingApiToken] = useState(false);
+  const [hasCopiedApiToken, setHasCopiedApiToken] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -144,14 +149,73 @@ export default function Settings() {
 
   const createApiToken = async (e: FormEvent) => {
     e.preventDefault();
+    setApiTokenError(null);
+
+    let expiresAt: string | null = null;
+
+    if (!apiTokenNeverExpires) {
+      const selectedExpiration = new Date(newApiTokenExpiresAt);
+
+      if (
+        !newApiTokenExpiresAt
+        || Number.isNaN(selectedExpiration.getTime())
+        || selectedExpiration <= new Date()
+      ) {
+        setApiTokenError(t('dashboard.settings.api.invalidExpiration'));
+        return;
+      }
+
+      expiresAt = selectedExpiration.toISOString();
+    }
+
+    setIsCreatingApiToken(true);
+
     try {
-      const res = await axios.post('/api/tokens', { name: newApiTokenName });
+      const res = await axios.post('/api/tokens', {
+        name: newApiTokenName,
+        expires_at: expiresAt,
+      });
       setGeneratedToken(res.data.token);
+      setHasCopiedApiToken(false);
       setNewApiTokenName('');
+      setNewApiTokenExpiresAt('');
+      setApiTokenNeverExpires(true);
       fetchApiTokens();
-      showSuccess(t('dashboard.toasts.tokenCreated'));
     } catch (err: any) {
-      showError(t('dashboard.toasts.tokenFailed'), err.response?.data?.message);
+      const validationErrors = err.response?.data?.errors;
+
+      if (validationErrors?.expires_at) {
+        setApiTokenError(t('dashboard.settings.api.invalidExpiration'));
+      } else if (validationErrors) {
+        const firstValidationError = Object.values(validationErrors)
+          .flat()
+          .find(message => typeof message === 'string');
+        setApiTokenError(
+          typeof firstValidationError === 'string'
+            ? firstValidationError
+            : t('dashboard.settings.api.unexpectedError'),
+        );
+      } else if (!err.response) {
+        setApiTokenError(t('dashboard.settings.api.networkError'));
+      } else {
+        setApiTokenError(
+          err.response.data?.message || t('dashboard.settings.api.unexpectedError'),
+        );
+      }
+    } finally {
+      setIsCreatingApiToken(false);
+    }
+  };
+
+  const copyApiToken = async () => {
+    if (!generatedToken) return;
+
+    try {
+      await navigator.clipboard.writeText(generatedToken);
+      setHasCopiedApiToken(true);
+      setApiTokenError(null);
+    } catch {
+      setApiTokenError(t('dashboard.settings.api.copyFailed'));
     }
   };
 
@@ -547,43 +611,147 @@ export default function Settings() {
                 </div>
               </div>
 
-              {generatedToken && (
-                <div style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', borderRadius: '12px', marginBottom: '24px' }}>
-                  <p style={{ color: '#10b981', fontWeight: 600, marginBottom: '8px' }}>{t('dashboard.settings.api.tokenWarning')}</p>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input type="text" readOnly value={generatedToken} className="input-field" style={{ flex: 1, fontFamily: 'monospace' }} />
-                    <button onClick={() => { navigator.clipboard.writeText(generatedToken); alert('Copied!'); }} style={{ padding: '0 16px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>Copy</button>
+              {apiTokenError && (
+                <div className="api-token-alert api-token-alert-error" role="alert">
+                  <div className="api-token-alert-icon">
+                    <AlertCircle size={21} />
                   </div>
+                  <div className="api-token-alert-content">
+                    <strong>{t('dashboard.settings.api.creationError')}</strong>
+                    <p>{apiTokenError}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="api-token-alert-close"
+                    onClick={() => setApiTokenError(null)}
+                    aria-label={t('common.close')}
+                  >
+                    <X size={18} />
+                  </button>
                 </div>
               )}
 
-              <form onSubmit={createApiToken} style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder={t('dashboard.settings.api.tokenName')}
-                  value={newApiTokenName}
-                  onChange={e => setNewApiTokenName(e.target.value)}
-                  required
-                  style={{ flex: 1, paddingLeft: '16px' }}
-                />
-                <button type="submit" style={{ padding: '0 24px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600 }}>{t('dashboard.settings.api.createToken')}</button>
+              {generatedToken && (
+                <div className="api-token-alert api-token-alert-success" role="status">
+                  <div className="api-token-alert-icon">
+                    <CheckCircle2 size={22} />
+                  </div>
+                  <div className="api-token-alert-content">
+                    <strong>{t('dashboard.settings.api.tokenCreatedTitle')}</strong>
+                    <p>{t('dashboard.settings.api.tokenWarning')}</p>
+                    <div className="api-token-value-row">
+                      <input
+                        type="text"
+                        readOnly
+                        value={generatedToken}
+                        className="api-token-value"
+                        onFocus={event => event.currentTarget.select()}
+                        aria-label={t('dashboard.settings.api.generatedToken')}
+                      />
+                      <button
+                        type="button"
+                        className={`api-token-copy-btn${hasCopiedApiToken ? ' copied' : ''}`}
+                        onClick={copyApiToken}
+                      >
+                        {hasCopiedApiToken ? <Check size={17} /> : <Copy size={17} />}
+                        {hasCopiedApiToken ? t('common.copied') : t('common.copy')}
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="api-token-alert-close"
+                    onClick={() => {
+                      setGeneratedToken(null);
+                      setHasCopiedApiToken(false);
+                    }}
+                    aria-label={t('common.close')}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              )}
+
+              <form onSubmit={createApiToken} style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder={t('dashboard.settings.api.tokenName')}
+                    value={newApiTokenName}
+                    onChange={e => {
+                      setNewApiTokenName(e.target.value);
+                      setApiTokenError(null);
+                    }}
+                    required
+                    style={{ flex: '1 1 260px', paddingLeft: '16px' }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isCreatingApiToken}
+                    className="api-token-create-btn"
+                  >
+                    {isCreatingApiToken && <Loader2 size={17} className="api-token-spinner" />}
+                    {isCreatingApiToken
+                      ? t('dashboard.settings.api.creatingToken')
+                      : t('dashboard.settings.api.createToken')}
+                  </button>
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)', cursor: 'pointer', width: 'fit-content' }}>
+                  <input
+                    type="checkbox"
+                    checked={apiTokenNeverExpires}
+                    onChange={e => {
+                      setApiTokenNeverExpires(e.target.checked);
+                      setApiTokenError(null);
+                    }}
+                  />
+                  {t('dashboard.settings.api.neverExpires')}
+                </label>
+
+                {!apiTokenNeverExpires && (
+                  <div className="settings-field" style={{ marginBottom: 0, maxWidth: '360px' }}>
+                    <label className="settings-label">{t('dashboard.settings.api.expirationDate')}</label>
+                    <input
+                      type="datetime-local"
+                      className="input-field"
+                      value={newApiTokenExpiresAt}
+                      onChange={e => {
+                        setNewApiTokenExpiresAt(e.target.value);
+                        setApiTokenError(null);
+                      }}
+                      required
+                    />
+                  </div>
+                )}
               </form>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {apiTokens.length === 0 ? (
                   <div style={{ color: 'var(--text-muted)', fontSize: '14px', textAlign: 'center', padding: '24px 0' }}>{t('dashboard.settings.api.noTokens')}</div>
-                ) : apiTokens.map((token: any) => (
-                  <div key={token.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                    <div>
-                      <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{token.name}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{t('dashboard.settings.api.created')} {new Date(token.created_at).toLocaleDateString()}</div>
+                ) : apiTokens.map((token: any) => {
+                  const isExpired = token.expires_at && new Date(token.expires_at) <= new Date();
+
+                  return (
+                    <div key={token.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{token.name}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{t('dashboard.settings.api.created')} {new Date(token.created_at).toLocaleDateString(i18n.language)}</div>
+                        <div style={{ fontSize: '12px', color: isExpired ? '#ef4444' : 'var(--text-muted)', marginTop: '4px' }}>
+                          {isExpired
+                            ? t('dashboard.settings.api.expired')
+                            : token.expires_at
+                              ? `${t('dashboard.settings.api.expires')} ${new Date(token.expires_at).toLocaleString(i18n.language)}`
+                              : t('dashboard.settings.api.neverExpires')}
+                        </div>
+                      </div>
+                      <button onClick={() => deleteApiToken(token.id)} style={{ color: '#ef4444', background: 'transparent', border: 'none', cursor: 'pointer', padding: '8px' }} title={t('dashboard.settings.api.revoke')}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </button>
                     </div>
-                    <button onClick={() => deleteApiToken(token.id)} style={{ color: '#ef4444', background: 'transparent', border: 'none', cursor: 'pointer', padding: '8px' }} title={t('dashboard.settings.api.revoke')}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

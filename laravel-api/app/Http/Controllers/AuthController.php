@@ -41,7 +41,7 @@ class AuthController extends Controller
 
         return response()->json([
             'user' => new UserResource($user->load('tenant.plan')),
-            'token' => $user->createToken('auth_token')->plainTextToken
+            'token' => $user->createToken('auth_token', ['*'], now()->addDay())->plainTextToken
         ], 201);
     }
 
@@ -66,7 +66,7 @@ class AuthController extends Controller
 
         return response()->json([
             'user' => new UserResource($user->load('tenant.plan')),
-            'token' => $user->createToken('auth_token')->plainTextToken
+            'token' => $user->createToken('auth_token', ['*'], now()->addDay())->plainTextToken
         ]);
     }
 
