@@ -2,7 +2,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { usePage } from '@inertiajs/react';
 import { PageProps } from '../types';
 import axios from 'axios';
-import { showSuccess, showError } from '../utils/alerts';
+import { confirmAction, showSuccess, showError } from '../utils/alerts';
 import ColorPicker from '../components/ColorPicker';
 import { useTranslation } from 'react-i18next';
 import DashboardLayout from '../layouts/DashboardLayout';
@@ -220,7 +220,14 @@ export default function Settings() {
   };
 
   const deleteApiToken = async (id: string) => {
-    if (!window.confirm(t('dashboard.toasts.confirmRevokeToken'))) return;
+    const isConfirmed = await confirmAction(
+      t('dashboard.toasts.revokeTokenTitle'),
+      t('dashboard.toasts.confirmRevokeToken'),
+      t('dashboard.toasts.revokeTokenConfirm'),
+    );
+
+    if (!isConfirmed) return;
+
     try {
       await axios.delete(`/api/tokens/${id}`);
       fetchApiTokens();

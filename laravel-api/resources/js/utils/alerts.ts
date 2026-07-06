@@ -55,3 +55,26 @@ export const confirmDelete = async (title: string, text: string): Promise<boolea
 
   return result.isConfirmed;
 };
+
+export const confirmAction = async (
+  title: string,
+  text: string,
+  confirmButtonText: string,
+): Promise<boolean> => {
+  const result = await MySwal.fire({
+    title,
+    text,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText,
+    cancelButtonText: i18n.t('common.cancel', { defaultValue: 'Cancel' }),
+    focusCancel: true,
+    customClass: {
+      popup: 'glass-panel',
+      confirmButton: 'swal-btn-danger',
+      cancelButton: 'swal-btn-cancel',
+    },
+  });
+
+  return result.isConfirmed;
+};
