@@ -43,6 +43,7 @@ class BunnyBackfillStorageCommand extends Command
         $this->info("Refreshing storage size for {$videos->count()} video(s)...");
 
         $updated = 0;
+        $stillZero = [];
 
         $bar = $this->output->createProgressBar($videos->count());
         $bar->start();
@@ -51,9 +52,14 @@ class BunnyBackfillStorageCommand extends Command
             $before = $video->size_bytes;
 
             $bunnyVideos->syncFromBunny($video);
+            $video->refresh();
 
-            if ($video->fresh()->size_bytes != $before) {
+            if ($video->size_bytes != $before) {
                 $updated++;
+            }
+
+            if ((int) $video->size_bytes <= 0) {
+                $stillZero[] = "{$video->title} (status: {$video->status}, guid: {$video->bunny_video_id})";
             }
 
             $bar->advance();
@@ -63,6 +69,16 @@ class BunnyBackfillStorageCommand extends Command
         $this->newLine();
 
         $this->info("Updated size_bytes for {$updated} video(s).");
+
+        if (!empty($stillZero)) {
+            $this->warn(count($stillZero) . ' video(s) still have no storage size (still processing, failed, or Bunny fetch failed):');
+            foreach (array_slice($stillZero, 0, 20) as $line) {
+                $this->line("  - {$line}");
+            }
+            if (count($stillZero) > 20) {
+                $this->line('  ... and ' . (count($stillZero) - 20) . ' more.');
+            }
+        }
 
         return self::SUCCESS;
     }
