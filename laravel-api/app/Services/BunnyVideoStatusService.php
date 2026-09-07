@@ -85,6 +85,12 @@ class BunnyVideoStatusService
                 $updates['duration_seconds'] = (int) round($length);
             }
 
+            $storageSize = $this->extractStorageSize($details);
+
+            if ($storageSize !== null && $storageSize > 0) {
+                $updates['size_bytes'] = $storageSize;
+            }
+
             $event = 'video.ready';
         } elseif (in_array($status, self::FAILED_STATUSES, true)) {
             $updates['status'] = 'failed';
@@ -179,6 +185,17 @@ class BunnyVideoStatusService
         foreach (['length', 'Length', 'duration', 'Duration', 'duration_seconds'] as $key) {
             if (isset($details[$key]) && is_numeric($details[$key])) {
                 return (float) $details[$key];
+            }
+        }
+
+        return null;
+    }
+
+    private function extractStorageSize(array $details): ?int
+    {
+        foreach (['storageSize', 'StorageSize'] as $key) {
+            if (isset($details[$key]) && is_numeric($details[$key])) {
+                return (int) $details[$key];
             }
         }
 

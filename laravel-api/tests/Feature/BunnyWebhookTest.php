@@ -27,6 +27,7 @@ class BunnyWebhookTest extends TestCase
                 'guid' => 'bunny-guid',
                 'status' => 3,
                 'length' => 248,
+                'storageSize' => 734000000,
             ]),
             'https://academy.test/api/zenon-webhook' => Http::response(['message' => 'ok']),
         ]);
@@ -40,6 +41,7 @@ class BunnyWebhookTest extends TestCase
             'id' => $video->id,
             'status' => 'ready',
             'duration_seconds' => 248,
+            'size_bytes' => 734000000,
         ]);
 
         Http::assertSent(fn (HttpRequest $request) => $this->isReadyTenantWebhook($request, $video));
