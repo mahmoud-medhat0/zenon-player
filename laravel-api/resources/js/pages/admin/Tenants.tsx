@@ -28,6 +28,8 @@ interface Tenant {
 interface TenantDetail extends Tenant {
   storage_used_gb: number;
   storage_limit_gb: number;
+  bandwidth_used_gb: number;
+  bandwidth_limit_gb: number;
   users?: Array<{ id: string; name: string; email: string; role: string }>;
   videos?: Array<{ id: string; title: string; status: string }>;
 }
@@ -262,6 +264,10 @@ export default function TenantsPage() {
             <div className="admin-detail-stat">
               <span className="admin-detail-label">{t('admin.tenants.storage')}</span>
               <span className="admin-detail-value">{selectedTenant.storage_used_gb} / {selectedTenant.storage_limit_gb} GB</span>
+            </div>
+            <div className="admin-detail-stat">
+              <span className="admin-detail-label">{t('admin.tenants.bandwidth')}</span>
+              <span className="admin-detail-value">{selectedTenant.bandwidth_used_gb} / {selectedTenant.bandwidth_limit_gb} GB</span>
             </div>
             <div className="admin-detail-stat">
               <span className="admin-detail-label">{t('admin.tenants.users')}</span>

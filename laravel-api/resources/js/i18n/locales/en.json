@@ -306,6 +306,7 @@
       "plan": "Plan",
       "users": "Users",
       "storage": "Storage",
+      "bandwidth": "Bandwidth",
       "status": "Status",
       "created": "Created",
       "details": "Details",
