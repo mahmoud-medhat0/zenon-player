@@ -13,6 +13,10 @@ class BunnyVideoStatusService
     private const READY_STATUSES = [3, 4];
     private const FAILED_STATUSES = [5, 8];
 
+    public function __construct(private PlanService $planService)
+    {
+    }
+
     public function syncFromWebhookPayload(array $payload): array
     {
         $videoGuid = $this->getPayloadValue($payload, ['VideoGuid', 'videoGuid', 'video_guid', 'guid']);
@@ -78,20 +82,32 @@ class BunnyVideoStatusService
         $event = null;
 
         if ($this->isReadyStatus($status)) {
-            $updates['status'] = 'ready';
             $length = $this->extractLength($details);
+            $tenant = $video->tenant;
 
-            if ($length !== null) {
+            if ($length !== null && $tenant && !$this->planService->canCreateVideo($tenant, (int) round($length))) {
+                $updates['status'] = 'failed';
                 $updates['duration_seconds'] = (int) round($length);
+                $event = 'video.failed';
+
+                Log::warning("Video {$video->id} exceeds plan max length ({$tenant->getMaxVideoLengthSec()}s, got {$length}s); marking failed and removing from Bunny.");
+
+                $this->deleteFromBunny($video);
+            } else {
+                $updates['status'] = 'ready';
+
+                if ($length !== null) {
+                    $updates['duration_seconds'] = (int) round($length);
+                }
+
+                $storageSize = $this->extractStorageSize($details);
+
+                if ($storageSize !== null && $storageSize > 0) {
+                    $updates['size_bytes'] = $storageSize;
+                }
+
+                $event = 'video.ready';
             }
-
-            $storageSize = $this->extractStorageSize($details);
-
-            if ($storageSize !== null && $storageSize > 0) {
-                $updates['size_bytes'] = $storageSize;
-            }
-
-            $event = 'video.ready';
         } elseif (in_array($status, self::FAILED_STATUSES, true)) {
             $updates['status'] = 'failed';
             $event = 'video.failed';
@@ -205,5 +221,22 @@ class BunnyVideoStatusService
     private function isReadyStatus(int $status): bool
     {
         return in_array($status, self::READY_STATUSES, true);
+    }
+
+    private function deleteFromBunny(Video $video): void
+    {
+        $libraryId = config('video.bunny.library_id');
+        $apiKey = config('video.bunny.api_key');
+
+        if (!$libraryId || !$apiKey || !$video->bunny_video_id) {
+            return;
+        }
+
+        try {
+            Http::withHeaders(['AccessKey' => $apiKey])
+                ->delete("https://video.bunnycdn.com/library/{$libraryId}/videos/{$video->bunny_video_id}");
+        } catch (\Throwable $e) {
+            Log::warning("Failed to delete over-limit video {$video->bunny_video_id} from Bunny: " . $e->getMessage());
+        }
     }
 }

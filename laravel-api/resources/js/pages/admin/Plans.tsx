@@ -155,6 +155,7 @@ export default function PlansPage() {
   };
 
   const formatDuration = (seconds: number) => {
+    if (!seconds || seconds <= 0) return t('admin.plans.unlimited');
     if (seconds >= 3600) return `${seconds / 3600}${t('admin.plans.hoursShort', { defaultValue: 'h' })}`;
     if (seconds >= 60) return `${seconds / 60}${t('admin.plans.minutesShort', { defaultValue: 'm' })}`;
     return `${seconds}${t('admin.plans.secondsShort', { defaultValue: 's' })}`;
@@ -272,7 +273,18 @@ export default function PlansPage() {
             </div>
             <div className="admin-form-group">
               <label>{t('admin.plans.maxVideoSec')}</label>
-              <input type="number" className="admin-form-input" value={form.max_video_length_sec} onChange={(e) => setForm({ ...form, max_video_length_sec: parseInt(e.target.value) || 300 })} min="1" required />
+              <input
+                type="number"
+                className="admin-form-input"
+                value={form.max_video_length_sec}
+                onChange={(e) => {
+                  const parsed = parseInt(e.target.value, 10);
+                  setForm({ ...form, max_video_length_sec: Number.isNaN(parsed) ? 0 : parsed });
+                }}
+                min="0"
+                required
+              />
+              <span className="admin-form-hint">{t('admin.plans.maxVideoUnlimitedHint')}</span>
             </div>
           </div>
           <div className="admin-form-group">

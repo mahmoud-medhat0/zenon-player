@@ -56,6 +56,10 @@ class PlanService
     {
         $maxDuration = $tenant->getMaxVideoLengthSec();
 
+        if ($maxDuration <= 0) {
+            return true; // 0 on the plan means no length limit
+        }
+
         return $durationSeconds <= $maxDuration;
     }
 

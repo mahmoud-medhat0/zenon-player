@@ -47,6 +47,40 @@ class BunnyWebhookTest extends TestCase
         Http::assertSent(fn (HttpRequest $request) => $this->isReadyTenantWebhook($request, $video));
     }
 
+    public function test_bunny_video_exceeding_plan_length_is_marked_failed_and_removed_from_bunny(): void
+    {
+        $this->configureBunny();
+
+        // No plan assigned -> Tenant::getMaxVideoLengthSec() falls back to 300s.
+        $tenant = $this->createTenantWithWebhook();
+        $video = $this->createProcessingBunnyVideo($tenant);
+
+        Http::fake([
+            'https://video.bunnycdn.com/library/123/videos/bunny-guid' => Http::response([
+                'guid' => 'bunny-guid',
+                'status' => 3,
+                'length' => 400,
+            ]),
+            'https://academy.test/api/zenon-webhook' => Http::response(['message' => 'ok']),
+        ]);
+
+        $this->postJson('/api/webhooks/bunny', [
+            'VideoGuid' => 'bunny-guid',
+            'Status' => 3,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('videos', [
+            'id' => $video->id,
+            'status' => 'failed',
+            'duration_seconds' => 400,
+        ]);
+
+        Http::assertSent(fn (HttpRequest $request) =>
+            $request->url() === 'https://video.bunnycdn.com/library/123/videos/bunny-guid'
+            && $request->method() === 'DELETE'
+        );
+    }
+
     public function test_dashboard_lazy_bunny_sync_sends_ready_webhook(): void
     {
         $this->configureBunny();
@@ -71,7 +105,7 @@ class BunnyWebhookTest extends TestCase
             'https://academy.test/api/zenon-webhook' => Http::response(['message' => 'ok']),
         ]);
 
-        (new \App\Services\BunnyVideoStatusService())->syncFromBunny($video);
+        app(\App\Services\BunnyVideoStatusService::class)->syncFromBunny($video);
 
         $this->actingAs($user)
             ->getJson('/api/videos')

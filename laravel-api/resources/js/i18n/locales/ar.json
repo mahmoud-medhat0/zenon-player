@@ -357,6 +357,8 @@
       "storageGB": "المساحة (جيجابايت)",
       "bandwidthGB": "الترافيك الشهري (جيجابايت)",
       "maxVideoSec": "حد أقصى للفيديو (ثانية)",
+      "maxVideoUnlimitedHint": "خليها 0 عشان يبقى غير محدود.",
+      "unlimited": "غير محدود",
       "activePlan": "خطة نشطة",
       "features": "الميزات",
       "save": "حفظ الخطة",

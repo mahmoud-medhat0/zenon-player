@@ -30,7 +30,7 @@ class ProcessVideo implements ShouldQueue
         $this->video = $video;
     }
 
-    public function handle(): void
+    public function handle(PlanService $planService): void
     {
         Log::info("Starting video processing for Video ID: {$this->video->id}");
 
@@ -55,7 +55,7 @@ class ProcessVideo implements ShouldQueue
 
             $tenant = $this->video->tenant()->with('plan')->first();
 
-            if ($tenant && !$this->isDurationAllowed($tenant, $durationInSeconds)) {
+            if ($tenant && !$planService->canCreateVideo($tenant, $durationInSeconds)) {
                 $maxMinutes = floor($tenant->getMaxVideoLengthSec() / 60);
                 $this->video->update([
                     'status' => 'failed',
@@ -127,12 +127,6 @@ class ProcessVideo implements ShouldQueue
             $this->video->update(['status' => 'failed']);
             throw $e;
         }
-    }
-
-    private function isDurationAllowed($tenant, int $durationSeconds): bool
-    {
-        $maxDuration = $tenant->getMaxVideoLengthSec();
-        return $durationSeconds <= $maxDuration;
     }
 
     private function getAllowedQualities($tenant, array $qualities, int $sourceHeight): array

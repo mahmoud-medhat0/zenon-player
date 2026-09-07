@@ -357,6 +357,8 @@
       "storageGB": "Storage (GB)",
       "bandwidthGB": "Monthly Bandwidth (GB)",
       "maxVideoSec": "Max Video (sec)",
+      "maxVideoUnlimitedHint": "Set to 0 for no length limit.",
+      "unlimited": "Unlimited",
       "activePlan": "Active Plan",
       "features": "Features",
       "save": "Save Plan",
