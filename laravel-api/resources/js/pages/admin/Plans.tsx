@@ -182,10 +182,10 @@ export default function PlansPage() {
             <div className="admin-plan-header">
               <h3 className="admin-plan-name">{plan.name}</h3>
               <div className="admin-plan-price">
-                <span className="admin-plan-amount"></span>
+                <span className="admin-plan-amount">${plan.price_monthly}</span>
                 <span className="admin-plan-period">/{t('admin.plans.month')}</span>
               </div>
-              {plan.price_yearly > 0 && <span className="admin-plan-yearly">/{t('admin.plans.year')}</span>}
+              {plan.price_yearly > 0 && <span className="admin-plan-yearly">${plan.price_yearly}/{t('admin.plans.year')}</span>}
             </div>
             <div className="admin-plan-limits">
               <div className="admin-plan-limit"><Users size={16} /><span>{plan.max_users} {t('admin.plans.users')}</span></div>
