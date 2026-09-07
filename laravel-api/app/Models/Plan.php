@@ -16,6 +16,7 @@ class Plan extends Model
         'price_yearly',
         'max_users',
         'max_storage_gb',
+        'max_bandwidth_gb',
         'max_video_length_sec',
         'features',
         'is_active',

@@ -56,11 +56,11 @@ class WebAuthController extends Controller
             'tenant_name' => 'required|string|max:255',
         ]);
 
-        $freePlan = Plan::where('slug', 'free')->first();
+        $defaultPlan = Plan::where('slug', 'starter')->first() ?? Plan::where('is_active', true)->first();
         $tenant = Tenant::create([
             'name' => $data['tenant_name'],
-            'plan_id' => $freePlan?->id,
-            'plan_tier' => $freePlan?->slug ?? 'free',
+            'plan_id' => $defaultPlan?->id,
+            'plan_tier' => $defaultPlan?->slug ?? 'starter',
             'is_active' => true,
         ]);
 

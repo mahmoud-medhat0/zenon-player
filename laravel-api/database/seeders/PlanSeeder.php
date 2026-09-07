@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Plan;
+use App\Models\Tenant;
 use Illuminate\Database\Seeder;
 
 class PlanSeeder extends Seeder
@@ -11,23 +12,13 @@ class PlanSeeder extends Seeder
     {
         $plans = [
             [
-                'name' => 'Free',
-                'slug' => 'free',
-                'price_monthly' => 0,
-                'price_yearly' => 0,
-                'max_users' => 1,
-                'max_storage_gb' => 1,
-                'max_video_length_sec' => 300,
-                'features' => ['basic_upload', 'sd_streaming'],
-                'is_active' => true,
-            ],
-            [
                 'name' => 'Starter',
                 'slug' => 'starter',
-                'price_monthly' => 9.99,
-                'price_yearly' => 99.99,
+                'price_monthly' => 5.00,
+                'price_yearly' => 49.00,
                 'max_users' => 5,
                 'max_storage_gb' => 50,
+                'max_bandwidth_gb' => 250,
                 'max_video_length_sec' => 1800,
                 'features' => ['basic_upload', 'hd_streaming', 'analytics', 'custom_thumbnail'],
                 'is_active' => true,
@@ -35,10 +26,11 @@ class PlanSeeder extends Seeder
             [
                 'name' => 'Pro',
                 'slug' => 'pro',
-                'price_monthly' => 29.99,
-                'price_yearly' => 299.99,
-                'max_users' => 25,
-                'max_storage_gb' => 500,
+                'price_monthly' => 19.00,
+                'price_yearly' => 189.00,
+                'max_users' => 15,
+                'max_storage_gb' => 250,
+                'max_bandwidth_gb' => 1500,
                 'max_video_length_sec' => 7200,
                 'features' => ['basic_upload', 'hd_streaming', '4k_streaming', 'analytics', 'custom_thumbnail', 'privacy_controls', 'team_management'],
                 'is_active' => true,
@@ -46,21 +38,36 @@ class PlanSeeder extends Seeder
             [
                 'name' => 'Enterprise',
                 'slug' => 'enterprise',
-                'price_monthly' => 99.99,
-                'price_yearly' => 999.99,
-                'max_users' => 100,
-                'max_storage_gb' => 2000,
+                'price_monthly' => 49.00,
+                'price_yearly' => 489.00,
+                'max_users' => 50,
+                'max_storage_gb' => 1000,
+                'max_bandwidth_gb' => 5000,
                 'max_video_length_sec' => 14400,
                 'features' => ['basic_upload', 'hd_streaming', '4k_streaming', 'analytics', 'custom_thumbnail', 'privacy_controls', 'team_management', 'api_access', 'priority_support', 'custom_branding'],
                 'is_active' => true,
             ],
         ];
 
-        foreach ($plans as $plan) {
-            Plan::updateOrCreate(
-                ['slug' => $plan['slug']],
-                $plan
+        $starterPlan = null;
+
+        foreach ($plans as $planData) {
+            $created = Plan::updateOrCreate(
+                ['slug' => $planData['slug']],
+                $planData
             );
+            if ($planData['slug'] === 'starter') {
+                $starterPlan = $created;
+            }
+        }
+
+        // Clean up Free plan if it exists
+        $freePlan = Plan::where('slug', 'free')->first();
+        if ($freePlan) {
+            if ($starterPlan) {
+                Tenant::where('plan_id', $freePlan->id)->update(['plan_id' => $starterPlan->id]);
+            }
+            $freePlan->delete();
         }
     }
 }

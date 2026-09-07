@@ -42,6 +42,7 @@ class PlanController extends Controller
             'price_yearly' => 'required|numeric|min:0',
             'max_users' => 'required|integer|min:1',
             'max_storage_gb' => 'required|integer|min:1',
+            'max_bandwidth_gb' => 'required|integer|min:1',
             'max_video_length_sec' => 'required|integer|min:1',
             'features' => 'required|array',
             'features.*' => 'string',
@@ -86,19 +87,20 @@ class PlanController extends Controller
             'price_yearly' => 'sometimes|numeric|min:0',
             'max_users' => 'sometimes|integer|min:1',
             'max_storage_gb' => 'sometimes|integer|min:1',
+            'max_bandwidth_gb' => 'sometimes|integer|min:1',
             'max_video_length_sec' => 'sometimes|integer|min:1',
             'features' => 'sometimes|array',
             'features.*' => 'string',
             'is_active' => 'sometimes|boolean',
         ]);
 
-        $oldData = $plan->only(['name', 'slug', 'price_monthly', 'price_yearly', 'max_users', 'max_storage_gb', 'max_video_length_sec', 'features', 'is_active']);
+        $oldData = $plan->only(['name', 'slug', 'price_monthly', 'price_yearly', 'max_users', 'max_storage_gb', 'max_bandwidth_gb', 'max_video_length_sec', 'features', 'is_active']);
 
         $plan->update($validated);
 
         activity()
             ->performedOn($plan)
-            ->withProperties(['old' => $oldData, 'attributes' => $plan->only(['name', 'slug', 'price_monthly', 'price_yearly', 'max_users', 'max_storage_gb', 'max_video_length_sec', 'features', 'is_active'])])
+            ->withProperties(['old' => $oldData, 'attributes' => $plan->only(['name', 'slug', 'price_monthly', 'price_yearly', 'max_users', 'max_storage_gb', 'max_bandwidth_gb', 'max_video_length_sec', 'features', 'is_active'])])
             ->event('plan_updated')
             ->log('Plan updated by admin');
 

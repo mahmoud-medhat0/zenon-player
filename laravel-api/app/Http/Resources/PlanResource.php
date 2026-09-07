@@ -17,6 +17,7 @@ class PlanResource extends JsonResource
             'price_yearly' => (float) $this->price_yearly,
             'max_users' => $this->max_users,
             'max_storage_gb' => $this->max_storage_gb,
+            'max_bandwidth_gb' => $this->max_bandwidth_gb ?? 10,
             'max_video_length_sec' => $this->max_video_length_sec,
             'features' => $this->features ?? [],
             'is_active' => $this->is_active,

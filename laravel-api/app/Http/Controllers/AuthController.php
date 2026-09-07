@@ -22,11 +22,11 @@ class AuthController extends Controller
 
         $tenant = Tenant::create(['name' => $request->tenant_name]);
         
-        $freePlan = \App\Models\Plan::where('slug', 'free')->first();
-        if ($freePlan) {
+        $defaultPlan = \App\Models\Plan::where('slug', 'starter')->first() ?? \App\Models\Plan::where('is_active', true)->first();
+        if ($defaultPlan) {
             $tenant->update([
-                'plan_id' => $freePlan->id,
-                'plan_tier' => $freePlan->slug,
+                'plan_id' => $defaultPlan->id,
+                'plan_tier' => $defaultPlan->slug,
             ]);
         }
         

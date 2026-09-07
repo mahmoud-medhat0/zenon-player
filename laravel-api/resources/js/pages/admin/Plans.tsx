@@ -6,7 +6,7 @@ import AdminLayout from '../../components/admin/AdminLayout';
 import AdminModal from '../../components/admin/AdminModal';
 import axios from 'axios';
 import { showSuccess, showError, confirmDelete } from '../../utils/alerts';
-import { Plus, Pencil, Trash2, X, Check, Users, HardDrive, Clock } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Check, Users, HardDrive, Clock, Zap } from 'lucide-react';
 
 interface Plan {
   id: string;
@@ -16,6 +16,7 @@ interface Plan {
   price_yearly: number;
   max_users: number;
   max_storage_gb: number;
+  max_bandwidth_gb: number;
   max_video_length_sec: number;
   features: string[];
   is_active: boolean;
@@ -45,6 +46,7 @@ const emptyForm = {
   price_yearly: 0,
   max_users: 1,
   max_storage_gb: 1,
+  max_bandwidth_gb: 10,
   max_video_length_sec: 300,
   features: [] as string[],
   is_active: true,
@@ -95,6 +97,7 @@ export default function PlansPage() {
       price_yearly: plan.price_yearly,
       max_users: plan.max_users,
       max_storage_gb: plan.max_storage_gb,
+      max_bandwidth_gb: plan.max_bandwidth_gb || 10,
       max_video_length_sec: plan.max_video_length_sec,
       features: [...plan.features],
       is_active: plan.is_active,
@@ -157,6 +160,11 @@ export default function PlansPage() {
     return `${seconds}${t('admin.plans.secondsShort', { defaultValue: 's' })}`;
   };
 
+  const formatGb = (gb: number) => {
+    if (gb >= 1000) return `${gb / 1000} TB`;
+    return `${gb} GB`;
+  };
+
   if (loading) {
     return <div className="admin-loading"><div className="admin-spinner" /></div>;
   }
@@ -189,7 +197,8 @@ export default function PlansPage() {
             </div>
             <div className="admin-plan-limits">
               <div className="admin-plan-limit"><Users size={16} /><span>{plan.max_users} {t('admin.plans.users')}</span></div>
-              <div className="admin-plan-limit"><HardDrive size={16} /><span>{plan.max_storage_gb} {t('admin.plans.storage')}</span></div>
+              <div className="admin-plan-limit"><HardDrive size={16} /><span>{formatGb(plan.max_storage_gb)} {t('admin.plans.storageLabel')}</span></div>
+              <div className="admin-plan-limit"><Zap size={16} /><span>{formatGb(plan.max_bandwidth_gb || 10)} {t('admin.plans.bandwidthLabel')}</span></div>
               <div className="admin-plan-limit"><Clock size={16} /><span>{formatDuration(plan.max_video_length_sec)} {t('admin.plans.maxVideo')}</span></div>
             </div>
             <div className="admin-plan-features">
@@ -248,7 +257,7 @@ export default function PlansPage() {
               <input type="number" className="admin-form-input" value={form.price_yearly} onChange={(e) => setForm({ ...form, price_yearly: parseFloat(e.target.value) || 0 })} min="0" step="0.01" required />
             </div>
           </div>
-          <div className="admin-form-row-3">
+          <div className="admin-form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
             <div className="admin-form-group">
               <label>{t('admin.plans.maxUsersLabel')}</label>
               <input type="number" className="admin-form-input" value={form.max_users} onChange={(e) => setForm({ ...form, max_users: parseInt(e.target.value) || 1 })} min="1" required />
@@ -256,6 +265,10 @@ export default function PlansPage() {
             <div className="admin-form-group">
               <label>{t('admin.plans.storageGB')}</label>
               <input type="number" className="admin-form-input" value={form.max_storage_gb} onChange={(e) => setForm({ ...form, max_storage_gb: parseInt(e.target.value) || 1 })} min="1" required />
+            </div>
+            <div className="admin-form-group">
+              <label>{t('admin.plans.bandwidthGB')}</label>
+              <input type="number" className="admin-form-input" value={form.max_bandwidth_gb} onChange={(e) => setForm({ ...form, max_bandwidth_gb: parseInt(e.target.value) || 1 })} min="1" required />
             </div>
             <div className="admin-form-group">
               <label>{t('admin.plans.maxVideoSec')}</label>
@@ -293,7 +306,8 @@ export default function PlansPage() {
             <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.monthlyPrice')}</span><span className="admin-detail-value">${detailPlan.price_monthly}</span></div>
             <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.yearlyPrice')}</span><span className="admin-detail-value">${detailPlan.price_yearly}</span></div>
             <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.maxUsers')}</span><span className="admin-detail-value">{detailPlan.max_users}</span></div>
-            <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.storageLabel')}</span><span className="admin-detail-value">{detailPlan.max_storage_gb} {t('admin.plans.gb', { defaultValue: 'GB' })}</span></div>
+            <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.storageLabel')}</span><span className="admin-detail-value">{formatGb(detailPlan.max_storage_gb)}</span></div>
+            <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.bandwidthLabel')}</span><span className="admin-detail-value">{formatGb(detailPlan.max_bandwidth_gb || 10)}</span></div>
             <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.maxVideoLabel')}</span><span className="admin-detail-value">{formatDuration(detailPlan.max_video_length_sec)}</span></div>
             <div className="admin-detail-stat"><span className="admin-detail-label">{t('admin.plans.tenants')}</span><span className="admin-detail-value">{detailPlan.tenants_count ?? 0}</span></div>
           </div>
