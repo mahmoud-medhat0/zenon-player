@@ -139,6 +139,7 @@ class PlanController extends Controller
 
         $plan = $tenant->plan;
         $storageUsed = $this->planService->getStorageUsageGb($tenant);
+        $bandwidthUsed = $this->planService->getBandwidthUsageGb($tenant);
 
         return response()->json([
             'tenant' => [
@@ -148,6 +149,8 @@ class PlanController extends Controller
                 'plan' => $plan ? new PlanResource($plan) : null,
                 'storage_used_gb' => $storageUsed,
                 'storage_limit_gb' => $tenant->getMaxStorageGb(),
+                'bandwidth_used_gb' => $bandwidthUsed,
+                'bandwidth_limit_gb' => $tenant->getMaxBandwidthGb(),
                 'users_count' => $tenant->getCurrentUserCount(),
                 'users_limit' => $tenant->getMaxUsers(),
             ],

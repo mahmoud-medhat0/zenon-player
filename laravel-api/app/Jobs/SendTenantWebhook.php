@@ -83,9 +83,7 @@ class SendTenantWebhook implements ShouldQueue
         }
 
         if ($this->video->bunny_video_id) {
-            $domain = config('video.bunny.pull_zone');
-
-            return $domain ? "https://{$domain}/{$this->video->bunny_video_id}/thumbnail.jpg" : null;
+            return $this->video->bunnySignedUrl('thumbnail.jpg');
         }
 
         if ($this->video->status === 'ready') {
@@ -107,9 +105,7 @@ class SendTenantWebhook implements ShouldQueue
         }
 
         if ($this->video->bunny_video_id) {
-            $domain = config('video.bunny.pull_zone');
-
-            return $domain ? "https://{$domain}/{$this->video->bunny_video_id}/playlist.m3u8" : null;
+            return $this->video->bunnySignedUrl('playlist.m3u8');
         }
 
         return url("/api/videos/{$this->video->id}/stream/playlist.m3u8");

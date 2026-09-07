@@ -14,7 +14,7 @@ class ImportVimeoVideoJob implements ShouldQueue
 
     public $tries = 5;
     public $timeout = 600;
-    
+
     // Use exponential backoff for retries: 1m, 2m, 4m, 8m...
     public $backoff = [60, 120, 240, 480];
 

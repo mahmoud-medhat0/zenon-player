@@ -21,6 +21,8 @@ class Tenant extends Model
         'webhook_url',
         'webhook_secret',
         'vimeo_access_token',
+        'bandwidth_used_bytes',
+        'bandwidth_synced_at',
     ];
 
     protected function casts(): array
@@ -29,6 +31,8 @@ class Tenant extends Model
             'is_active' => 'boolean',
             'allowed_domains' => 'array',
             'vimeo_access_token' => 'encrypted',
+            'bandwidth_used_bytes' => 'integer',
+            'bandwidth_synced_at' => 'datetime',
         ];
     }
 
@@ -79,6 +83,11 @@ class Tenant extends Model
     public function getMaxStorageGb(): int
     {
         return $this->plan?->max_storage_gb ?? 1;
+    }
+
+    public function getMaxBandwidthGb(): int
+    {
+        return $this->plan?->max_bandwidth_gb ?? 10;
     }
 
     public function getMaxVideoLengthSec(): int

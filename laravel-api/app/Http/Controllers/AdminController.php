@@ -206,6 +206,7 @@ class AdminController extends Controller
         $tenant = Tenant::with(['plan', 'users', 'videos'])->withCount(['users', 'videos'])->findOrFail($id);
 
         $storageUsed = $this->planService->getStorageUsageGb($tenant);
+        $bandwidthUsed = $this->planService->getBandwidthUsageGb($tenant);
 
         return response()->json([
             'tenant' => array_merge(
@@ -213,6 +214,8 @@ class AdminController extends Controller
                 [
                     'storage_used_gb' => $storageUsed,
                     'storage_limit_gb' => $tenant->getMaxStorageGb(),
+                    'bandwidth_used_gb' => $bandwidthUsed,
+                    'bandwidth_limit_gb' => $tenant->getMaxBandwidthGb(),
                 ]
             ),
         ]);
@@ -236,7 +239,12 @@ class AdminController extends Controller
 
         $storageUsed = $this->planService->getStorageUsageGb($tenant);
         if ($storageUsed > $plan->max_storage_gb) {
-            $warnings[] = "Tenant uses {$storageUsed} GB but new plan allows only {$plan->max_storage_gb} GB. Excess storage will need to be freed.";
+            $warnings[] = "Tenant currently uses {$storageUsed} GB storage but new plan limit is {$plan->max_storage_gb} GB.";
+        }
+
+        $bandwidthUsed = $this->planService->getBandwidthUsageGb($tenant);
+        if ($bandwidthUsed > $plan->max_bandwidth_gb) {
+            $warnings[] = "Tenant currently uses {$bandwidthUsed} GB bandwidth but new plan limit is {$plan->max_bandwidth_gb} GB.";
         }
 
         $tenant = $this->planService->assignPlan($tenant, $plan);

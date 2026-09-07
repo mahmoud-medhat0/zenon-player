@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('bunny:sync')->everyFiveMinutes()->withoutOverlapping();
+// Bunny only keeps raw CDN logs for 3 days; running a few times a day gives
+// plenty of headroom to catch up if a run fails.
+Schedule::command('bunny:sync-bandwidth')->everySixHours()->withoutOverlapping();

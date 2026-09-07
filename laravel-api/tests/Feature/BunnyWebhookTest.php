@@ -69,6 +69,8 @@ class BunnyWebhookTest extends TestCase
             'https://academy.test/api/zenon-webhook' => Http::response(['message' => 'ok']),
         ]);
 
+        (new \App\Services\BunnyVideoStatusService())->syncFromBunny($video);
+
         $this->actingAs($user)
             ->getJson('/api/videos')
             ->assertOk()
@@ -110,15 +112,14 @@ class BunnyWebhookTest extends TestCase
             'https://academy.test/api/zenon-webhook' => Http::response(['message' => 'ok']),
         ]);
 
-        $this->actingAs($user)
+        $response = $this->actingAs($user)
             ->getJson("/api/public/videos/{$video->id}")
             ->assertOk()
-            ->assertJson([
-                'id' => $video->id,
-                'status' => 'ready',
-                'duration' => 248,
-                'thumbnail_url' => 'https://vz.test/bunny-guid/thumbnail.jpg',
-            ]);
+            ->assertJsonPath('id', $video->id)
+            ->assertJsonPath('status', 'ready')
+            ->assertJsonPath('duration', 248);
+
+        $this->assertStringStartsWith('https://vz.test/bunny-guid/thumbnail.jpg', $response->json('thumbnail_url'));
 
         $this->assertDatabaseHas('videos', [
             'id' => $video->id,
@@ -174,7 +175,7 @@ class BunnyWebhookTest extends TestCase
             && $payload['status'] === 'ready'
             && $payload['duration'] === 248
             && $payload['duration_seconds'] === 248
-            && $payload['thumbnail_url'] === 'https://vz.test/bunny-guid/thumbnail.jpg'
+            && str_starts_with($payload['thumbnail_url'], 'https://vz.test/bunny-guid/thumbnail.jpg')
             && $signature === hash_hmac('sha256', json_encode($payload), 'secret');
     }
 }

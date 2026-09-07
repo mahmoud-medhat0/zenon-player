@@ -36,7 +36,7 @@ class BunnyVideoStatusService
         $details = $payload;
 
         if ($this->isReadyStatus($status) && !$this->extractLength($details)) {
-            $details = array_merge($details, $this->fetchDetails($videoGuid) ?? []);
+            $details = array_merge($details, $this->fetchDetails($video) ?? []);
         }
 
         $changed = $this->applyStatus($video, $status, $details);
@@ -56,7 +56,7 @@ class BunnyVideoStatusService
             return false;
         }
 
-        $details = $this->fetchDetails($video->bunny_video_id);
+        $details = $this->fetchDetails($video);
 
         if (!$details) {
             return false;
@@ -121,8 +121,9 @@ class BunnyVideoStatusService
         return true;
     }
 
-    public function fetchDetails(string $videoGuid): ?array
+    public function fetchDetails(Video $video): ?array
     {
+        $videoGuid = $video->bunny_video_id;
         $libraryId = config('video.bunny.library_id');
         $apiKey = config('video.bunny.api_key');
 

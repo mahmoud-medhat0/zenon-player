@@ -28,14 +28,6 @@ class BunnySyncCommand extends Command
      */
     public function handle(BunnyVideoStatusService $bunnyVideos)
     {
-        $libraryId = config('video.bunny.library_id');
-        $apiKey = config('video.bunny.api_key');
-
-        if (!$libraryId || !$apiKey) {
-            $this->error('Bunny Stream credentials missing in .env');
-            return;
-        }
-
         $statuses = $this->option('notify-ready') ? ['processing', 'ready'] : ['processing'];
 
         $videos = Video::whereIn('status', $statuses)

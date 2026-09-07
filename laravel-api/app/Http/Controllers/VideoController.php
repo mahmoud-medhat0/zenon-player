@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Video;
 use App\Services\BunnyVideoStatusService;
+use App\Services\PlanService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Yajra\DataTables\Facades\DataTables;
@@ -14,6 +15,10 @@ use OpenApi\Attributes as OA;
 #[OA\SecurityScheme(securityScheme: "bearerAuth", type: "http", scheme: "bearer")]
 class VideoController extends Controller
 {
+    public function __construct(
+        private PlanService $planService
+    ) {}
+
     private function hasValidVideoToken(Video $video, ?string $token): bool
     {
         if (! $token) {
@@ -29,13 +34,36 @@ class VideoController extends Controller
         return $expectedToken && hash_equals($expectedToken, $token);
     }
 
+    /**
+     * Registers a view (once per session) and reports whether the tenant's
+     * plan still has bandwidth left to serve it. This is the only gate we
+     * have on Bunny/Cloudflare traffic, since playback happens directly
+     * against the CDN and never touches our servers again after this call.
+     */
+    private function canServeStream(Video $video): bool
+    {
+        $tenant = $video->tenant;
+
+        if ($tenant && !$this->planService->canStreamVideo($tenant)) {
+            return false;
+        }
+
+        $sessionKey = "video_view_{$video->id}";
+        if (!session()->has($sessionKey)) {
+            $video->increment('views');
+            session()->put($sessionKey, true);
+        }
+
+        return true;
+    }
+
     public function index(Request $request, BunnyVideoStatusService $bunnyVideos)
     {
         // Real-time Bunny Stream Sync (Lazy check on dashboard load/poll)
         // Now dispatched to a background job to avoid slowing down the AJAX datatables request.
         \App\Jobs\SyncBunnyVideoStatuses::dispatchAfterResponse();
 
-        $query = Video::query();
+        $query = Video::with('tenant');
 
         return DataTables::of($query)
             ->addColumn('thumbnail', function($video) {
@@ -44,8 +72,7 @@ class VideoController extends Controller
                     $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
                     $thumbnail = "https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
                 } elseif ($video->bunny_video_id) {
-                    $bunnyDomain = config('video.bunny.pull_zone');
-                    $thumbnail = "https://{$bunnyDomain}/{$video->bunny_video_id}/thumbnail.jpg";
+                    $thumbnail = $video->bunnySignedUrl('thumbnail.jpg');
                 } elseif ($video->status === 'ready') {
                     $thumbnail = url("/api/videos/{$video->id}/thumbnail");
                 }
@@ -98,22 +125,34 @@ class VideoController extends Controller
 
         $thumbnailUrl = null;
         $streamUrl = null;
+        $bandwidthLimitReached = false;
 
         if ($video->cloudflare_uid) {
             $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
             $thumbnailUrl = "https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg";
             if ($video->status === 'ready') {
-                $streamUrl = "https://{$cfDomain}/{$video->cloudflare_uid}/manifest/video.m3u8";
+                if ($this->canServeStream($video)) {
+                    $streamUrl = "https://{$cfDomain}/{$video->cloudflare_uid}/manifest/video.m3u8";
+                } else {
+                    $bandwidthLimitReached = true;
+                }
             }
         } elseif ($video->bunny_video_id) {
-            $bunnyDomain = config('video.bunny.pull_zone');
-            $thumbnailUrl = $this->getBunnySignedUrl($video->bunny_video_id, $bunnyDomain, 'thumbnail.jpg');
+            $thumbnailUrl = $video->bunnySignedUrl('thumbnail.jpg');
             if ($video->status === 'ready') {
-                $streamUrl = $this->getBunnySignedUrl($video->bunny_video_id, $bunnyDomain, 'playlist.m3u8');
+                if ($this->canServeStream($video)) {
+                    $streamUrl = $video->bunnySignedUrl('playlist.m3u8');
+                } else {
+                    $bandwidthLimitReached = true;
+                }
             }
         } elseif ($video->status === 'ready') {
             $thumbnailUrl = url("/api/videos/{$video->id}/thumbnail");
-            $streamUrl = url("/api/videos/{$video->id}/stream/playlist.m3u8");
+            if ($this->canServeStream($video)) {
+                $streamUrl = url("/api/videos/{$video->id}/stream/playlist.m3u8");
+            } else {
+                $bandwidthLimitReached = true;
+            }
         }
 
         if ($thumbnailUrl && $hasValidToken) {
@@ -132,6 +171,7 @@ class VideoController extends Controller
             'status' => $video->status,
             'thumbnail_url' => $thumbnailUrl,
             'stream_url' => $streamUrl,
+            'bandwidth_limit_reached' => $bandwidthLimitReached,
             'branding' => [
                 'primary_color' => $video->tenant->primary_color,
                 'logo_url' => $video->tenant->logo_url,
@@ -159,8 +199,7 @@ class VideoController extends Controller
             $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
             return redirect("https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg");
         } elseif ($video->bunny_video_id) {
-            $bunnyDomain = config('video.bunny.pull_zone');
-            return redirect($this->getBunnySignedUrl($video->bunny_video_id, $bunnyDomain, 'thumbnail.jpg'));
+            return redirect($video->bunnySignedUrl('thumbnail.jpg'));
         }
 
         $path = "videos/{$video->tenant_id}/{$video->id}_data/thumbnail.jpg";
@@ -282,12 +321,15 @@ class VideoController extends Controller
             abort(403, 'This video is private.');
         }
 
+        if (basename($file) === 'playlist.m3u8' && !$this->canServeStream($video)) {
+            abort(403, "Bandwidth limit reached for this video's plan.");
+        }
+
         if ($video->cloudflare_uid && basename($file) === 'playlist.m3u8') {
             $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
             return redirect("https://{$cfDomain}/{$video->cloudflare_uid}/manifest/video.m3u8");
         } elseif ($video->bunny_video_id && basename($file) === 'playlist.m3u8') {
-            $bunnyDomain = config('video.bunny.pull_zone');
-            return redirect($this->getBunnySignedUrl($video->bunny_video_id, $bunnyDomain));
+            return redirect($video->bunnySignedUrl('playlist.m3u8'));
         }
 
         $file = basename($file);
@@ -311,14 +353,6 @@ class VideoController extends Controller
             abort(404);
         }
         
-        if ($file === 'playlist.m3u8') {
-            $sessionKey = "video_view_{$video->id}";
-            if (!session()->has($sessionKey)) {
-                $video->increment('views');
-                session()->put($sessionKey, true);
-            }
-        }
-        
         $mime = 'application/vnd.apple.mpegurl';
         if (str_ends_with($file, '.ts')) {
             $mime = 'video/mp2t';
@@ -330,31 +364,6 @@ class VideoController extends Controller
             'Pragma' => 'no-cache',
             'Expires' => '0',
         ]);
-    }
-
-    /**
-     * Generate a securely signed Bunny Stream URL
-     */
-    protected function getBunnySignedUrl($videoId, $domain, $file = 'playlist.m3u8')
-    {
-        $securityKey = config('video.bunny.security_key');
-        
-        if (!$securityKey) {
-            return "https://{$domain}/{$videoId}/{$file}";
-        }
-
-        $expires = time() + 7200; // 2 hours expiration
-        $path = "/{$videoId}/{$file}";
-
-        // Hashable string: SecurityKey + Path + Expires
-        $hashableBase = $securityKey . $path . $expires;
-        
-        $hash = hash('sha256', $hashableBase, true);
-        
-        $token = strtr(base64_encode($hash), '+/', '-_');
-        $token = str_replace('=', '', $token);
-
-        return "https://{$domain}{$path}?token={$token}&expires={$expires}";
     }
 
     /**

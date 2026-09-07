@@ -12,6 +12,7 @@ interface EmbedVideo {
   status: string;
   stream_url: string | null;
   thumbnail_url?: string | null;
+  bandwidth_limit_reached?: boolean;
   branding?: {
     primary_color?: string | null;
   };
@@ -61,6 +62,11 @@ export default function EmbedPlayer({ videoId }: Props) {
 
         if (data.status === 'failed') {
           setErrorMessage(t('embed.videoFailed'));
+          return;
+        }
+
+        if (data.bandwidth_limit_reached) {
+          setErrorMessage(t('embed.videoBandwidthLimitReached'));
           return;
         }
 
