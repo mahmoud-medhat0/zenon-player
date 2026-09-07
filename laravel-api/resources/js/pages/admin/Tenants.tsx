@@ -30,8 +30,8 @@ interface TenantDetail extends Tenant {
   storage_limit_gb: number;
   bandwidth_used_gb: number;
   bandwidth_limit_gb: number;
+  videos_count: number;
   users?: Array<{ id: string; name: string; email: string; role: string }>;
-  videos?: Array<{ id: string; title: string; status: string }>;
 }
 
 interface Plan {
@@ -271,11 +271,11 @@ export default function TenantsPage() {
             </div>
             <div className="admin-detail-stat">
               <span className="admin-detail-label">{t('admin.tenants.users')}</span>
-              <span className="admin-detail-value">{selectedTenant.users?.length || 0} / {selectedTenant.plan?.max_users || '-'}</span>
+              <span className="admin-detail-value">{selectedTenant.users_count || 0} / {selectedTenant.plan?.max_users || '-'}</span>
             </div>
             <div className="admin-detail-stat">
               <span className="admin-detail-label">{t('admin.tenants.videos')}</span>
-              <span className="admin-detail-value">{selectedTenant.videos?.length || 0}</span>
+              <span className="admin-detail-value">{selectedTenant.videos_count || 0}</span>
             </div>
           </div>
 

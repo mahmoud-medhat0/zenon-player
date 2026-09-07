@@ -17,6 +17,7 @@ class TenantResource extends JsonResource
             'plan' => new PlanResource($this->whenLoaded('plan')),
             'users_count' => $this->whenCounted('users'),
             'videos_count' => $this->whenCounted('videos'),
+            'users' => UserResource::collection($this->whenLoaded('users')),
             'allowed_domains' => $this->allowed_domains,
             'webhook_url' => $this->webhook_url,
             'webhook_secret' => $this->webhook_secret,
