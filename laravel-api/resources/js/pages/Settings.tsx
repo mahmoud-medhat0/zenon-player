@@ -6,7 +6,7 @@ import { confirmAction, showSuccess, showError } from '../utils/alerts';
 import ColorPicker from '../components/ColorPicker';
 import { useTranslation } from 'react-i18next';
 import DashboardLayout from '../layouts/DashboardLayout';
-import { AlertCircle, Check, CheckCircle2, Copy, Loader2, X } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Copy, KeyRound, Loader2, RefreshCw, X } from 'lucide-react';
 
 export default function Settings() {
   const { props } = usePage<PageProps>();
@@ -113,6 +113,12 @@ export default function Settings() {
     } finally {
       setIsUpdatingSettings(false);
     }
+  };
+
+  const generateWebhookSecret = () => {
+    const bytes = new Uint8Array(32);
+    window.crypto.getRandomValues(bytes);
+    setSettingsWebhookSecret(Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(''));
   };
 
   const handleUpdatePassword = async (e: FormEvent) => {
@@ -470,15 +476,13 @@ export default function Settings() {
                 <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>We will send POST requests here when a video finishes processing.</p>
               </div>
               <div className="settings-field">
-                <label htmlFor="settings-webhook-secret" className="settings-label">Webhook Secret (Optional)</label>
-                <input
-                  id="settings-webhook-secret"
-                  type="text"
-                  className="settings-input"
-                  placeholder="e.g. random-secret-key"
-                  value={settingsWebhookSecret}
-                  onChange={e => setSettingsWebhookSecret(e.target.value)}
-                />
+                <label htmlFor="settings-webhook-secret" className="settings-label">{t('dashboard.settings.workspace.webhookSecret')}</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                  <input id="settings-webhook-secret" type="text" className="settings-input" placeholder={t('dashboard.settings.workspace.webhookSecretPlaceholder')} value={settingsWebhookSecret} onChange={e => setSettingsWebhookSecret(e.target.value)} autoComplete="off" style={{ flex: 1, fontFamily: 'monospace' }} />
+                  <button type="button" className="api-token-create-btn" onClick={generateWebhookSecret} title={t('dashboard.settings.workspace.generateWebhookSecret')} style={{ whiteSpace: 'nowrap' }}>
+                    <KeyRound size={16} /> {t('dashboard.settings.workspace.generateKey')} <RefreshCw size={14} />
+                  </button>
+                </div>
               </div>
               {hasFeature('custom_branding') && (
                 <>
