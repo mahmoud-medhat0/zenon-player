@@ -327,7 +327,18 @@
       "selectPlan": "اختر الخطة",
       "choosePlan": "اختر خطة...",
       "assigningPlan": "جاري التعيين...",
-      "assignPlan": "تعيين الخطة"
+      "assignPlan": "تعيين الخطة",
+      "createTenant": "إنشاء مستأجر",
+      "editTenant": "تعديل المستأجر",
+      "deleteTenant": "حذف المستأجر",
+      "saving": "جاري الحفظ...",
+      "createdSuccess": "تم إنشاء المستأجر بنجاح",
+      "updatedSuccess": "تم تحديث المستأجر بنجاح",
+      "deletedSuccess": "تم حذف المستأجر بنجاح",
+      "deleteFailed": "فشل حذف المستأجر",
+      "failed": "فشلت العملية",
+      "deleteTitle": "حذف المستأجر؟",
+      "confirmDelete": "سيتم حذف {{name}} ومستخدميه وفيديوهاته نهائياً."
     },
     "plans": {
       "title": "الخطط",

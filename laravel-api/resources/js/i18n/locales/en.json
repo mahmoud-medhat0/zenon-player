@@ -327,7 +327,18 @@
       "selectPlan": "Select Plan",
       "choosePlan": "Choose a plan...",
       "assigningPlan": "Assigning...",
-      "assignPlan": "Assign Plan"
+      "assignPlan": "Assign Plan",
+      "createTenant": "Create Tenant",
+      "editTenant": "Edit Tenant",
+      "deleteTenant": "Delete Tenant",
+      "saving": "Saving...",
+      "createdSuccess": "Tenant created successfully",
+      "updatedSuccess": "Tenant updated successfully",
+      "deletedSuccess": "Tenant deleted successfully",
+      "deleteFailed": "Failed to delete tenant",
+      "failed": "Operation failed",
+      "deleteTitle": "Delete tenant?",
+      "confirmDelete": "This will permanently delete {{name}} and its users and videos."
     },
     "plans": {
       "title": "Plans",

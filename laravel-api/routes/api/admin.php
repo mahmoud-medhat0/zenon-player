@@ -19,6 +19,9 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::put('/plans/{id}', [PlanController::class, 'update']);
 
     Route::middleware('super_admin')->group(function () {
+        Route::post('/tenants', [AdminController::class, 'storeTenant']);
+        Route::put('/tenants/{id}', [AdminController::class, 'updateTenant']);
+        Route::delete('/tenants/{id}', [AdminController::class, 'destroyTenant']);
         Route::delete('/users/{id}', [AdminController::class, 'destroyUser']);
         Route::put('/tenants/{id}/plan', [AdminController::class, 'assignPlan']);
         Route::delete('/plans/{id}', [PlanController::class, 'destroy']);

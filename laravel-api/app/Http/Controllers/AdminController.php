@@ -201,6 +201,36 @@ class AdminController extends Controller
         ]);
     }
 
+    public function storeTenant(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'plan_id' => 'nullable|exists:plans,id',
+            'is_active' => 'sometimes|boolean',
+            'primary_color' => 'nullable|string|max:30',
+            'logo_url' => 'nullable|url|max:2048',
+            'allowed_domains' => 'nullable|array',
+            'allowed_domains.*' => 'string|max:255',
+            'webhook_url' => 'nullable|url|max:2048',
+        ]);
+
+        $plan = !empty($validated['plan_id']) ? Plan::findOrFail($validated['plan_id']) : null;
+        $tenant = Tenant::create(array_merge($validated, [
+            'plan_tier' => $plan?->slug ?? 'free',
+            'is_active' => $validated['is_active'] ?? true,
+        ]));
+
+        activity()
+            ->performedOn($tenant)
+            ->event('tenant_created')
+            ->log('Tenant created by admin');
+
+        return response()->json([
+            'tenant' => new TenantResource($tenant->load('plan')->loadCount('users')),
+            'message' => 'Tenant created successfully.',
+        ], 201);
+    }
+
     public function showTenant(string $id): JsonResponse
     {
         $tenant = Tenant::with(['plan', 'users', 'videos'])->withCount(['users', 'videos'])->findOrFail($id);
@@ -219,6 +249,50 @@ class AdminController extends Controller
                 ]
             ),
         ]);
+    }
+
+    public function updateTenant(Request $request, string $id): JsonResponse
+    {
+        $tenant = Tenant::findOrFail($id);
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'plan_id' => 'nullable|exists:plans,id',
+            'is_active' => 'sometimes|boolean',
+            'primary_color' => 'nullable|string|max:30',
+            'logo_url' => 'nullable|url|max:2048',
+            'allowed_domains' => 'nullable|array',
+            'allowed_domains.*' => 'string|max:255',
+            'webhook_url' => 'nullable|url|max:2048',
+        ]);
+
+        $oldData = $tenant->only(['name', 'plan_id', 'plan_tier', 'is_active']);
+        if (array_key_exists('plan_id', $validated)) {
+            $plan = $validated['plan_id'] ? Plan::findOrFail($validated['plan_id']) : null;
+            $validated['plan_tier'] = $plan?->slug ?? 'free';
+        }
+        $tenant->update($validated);
+
+        activity()
+            ->performedOn($tenant)
+            ->withProperties(['old' => $oldData, 'attributes' => $tenant->only(['name', 'plan_id', 'plan_tier', 'is_active'])])
+            ->event('tenant_updated')
+            ->log('Tenant updated by admin');
+
+        return response()->json([
+            'tenant' => new TenantResource($tenant->fresh(['plan'])->loadCount('users')),
+            'message' => 'Tenant updated successfully.',
+        ]);
+    }
+
+    public function destroyTenant(string $id): JsonResponse
+    {
+        $tenant = Tenant::findOrFail($id);
+        $name = $tenant->name;
+        $tenant->delete();
+
+        activity()->event('tenant_deleted')->log("Tenant '{$name}' deleted by admin");
+
+        return response()->json(['message' => 'Tenant deleted successfully.']);
     }
 
     public function assignPlan(Request $request, string $id): JsonResponse

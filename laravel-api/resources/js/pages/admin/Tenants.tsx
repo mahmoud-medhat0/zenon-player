@@ -6,8 +6,8 @@ import AdminLayout from '../../components/admin/AdminLayout';
 import AdminModal from '../../components/admin/AdminModal';
 import AdminSelect from '../../components/AdminSelect';
 import axios from 'axios';
-import { showSuccess, showError } from '../../utils/alerts';
-import { Search, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { showSuccess, showError, confirmDelete } from '../../utils/alerts';
+import { Plus, Search, Eye, Edit2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -59,6 +59,13 @@ export default function TenantsPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
+  const [showForm, setShowForm] = useState(false);
+  const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formPlanId, setFormPlanId] = useState('');
+  const [formActive, setFormActive] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
   // Detail modal
   const [selectedTenant, setSelectedTenant] = useState<TenantDetail | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -89,6 +96,59 @@ export default function TenantsPage() {
   }, [page, search]);
 
   useEffect(() => { fetchTenants(); }, [fetchTenants]);
+
+  const loadPlans = async () => {
+    const res = await axios.get('/api/admin/plans');
+    setPlans(res.data.plans);
+  };
+
+  const openCreate = async () => {
+    setEditingTenant(null);
+    setFormName('');
+    setFormPlanId('');
+    setFormActive(true);
+    try { await loadPlans(); } catch { showError(t('admin.tenants.loadFailed')); return; }
+    setShowForm(true);
+  };
+
+  const openEdit = async (tenant: Tenant) => {
+    setEditingTenant(tenant);
+    setFormName(tenant.name);
+    setFormPlanId(tenant.plan?.id || '');
+    setFormActive(tenant.is_active);
+    try { await loadPlans(); } catch { showError(t('admin.tenants.loadFailed')); return; }
+    setShowForm(true);
+  };
+
+  const submitTenant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const payload = { name: formName, plan_id: formPlanId || null, is_active: formActive };
+      if (editingTenant) {
+        await axios.put(`/api/admin/tenants/${editingTenant.id}`, payload);
+        showSuccess(t('admin.tenants.updatedSuccess'));
+      } else {
+        await axios.post('/api/admin/tenants', payload);
+        showSuccess(t('admin.tenants.createdSuccess'));
+      }
+      setShowForm(false);
+      fetchTenants();
+    } catch (err: any) {
+      showError(err.response?.data?.message || t('admin.tenants.failed'));
+    } finally { setSubmitting(false); }
+  };
+
+  const deleteTenant = async (tenant: Tenant) => {
+    if (!await confirmDelete(t('admin.tenants.deleteTitle'), t('admin.tenants.confirmDelete', { name: tenant.name }))) return;
+    try {
+      await axios.delete(`/api/admin/tenants/${tenant.id}`);
+      showSuccess(t('admin.tenants.deletedSuccess'));
+      fetchTenants();
+    } catch (err: any) {
+      showError(err.response?.data?.message || t('admin.tenants.deleteFailed'));
+    }
+  };
 
   const viewTenant = async (tenant: Tenant) => {
     try {
@@ -147,6 +207,11 @@ export default function TenantsPage() {
           <h1 className="admin-page-title">{t('admin.tenants.title')}</h1>
           <p className="admin-page-subtitle">{t('admin.tenants.subtitle')}</p>
         </div>
+        {isSuperAdmin && (
+          <button className="admin-btn admin-btn-primary" onClick={openCreate}>
+            <Plus size={18} /> {t('admin.tenants.createTenant')}
+          </button>
+        )}
       </div>
 
       <div className="admin-card">
@@ -213,9 +278,17 @@ export default function TenantsPage() {
                               <Eye size={16} />
                             </button>
                             {isSuperAdmin && (
-                              <button className="admin-btn admin-btn-sm" onClick={() => openPlanModal(tenant)}>
-                                {t('admin.tenants.changePlan')}
-                              </button>
+                              <>
+                                <button className="admin-btn admin-btn-sm" onClick={() => openPlanModal(tenant)}>
+                                  {t('admin.tenants.changePlan')}
+                                </button>
+                                <button className="admin-action-btn" onClick={() => openEdit(tenant)} title={t('admin.tenants.editTenant')}>
+                                  <Edit2 size={16} />
+                                </button>
+                                <button className="admin-action-btn admin-action-danger" onClick={() => deleteTenant(tenant)} title={t('admin.tenants.deleteTenant')}>
+                                  <Trash2 size={16} />
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -252,6 +325,42 @@ export default function TenantsPage() {
           )}
         </div>
       </div>
+
+      {showForm && (
+        <AdminModal
+          title={t(editingTenant ? 'admin.tenants.editTenant' : 'admin.tenants.createTenant')}
+          onClose={() => setShowForm(false)}
+          footer={
+            <>
+              <button type="button" className="admin-btn admin-btn-ghost" onClick={() => setShowForm(false)}>{t('common.cancel')}</button>
+              <button type="submit" form="tenant-form" className="admin-btn admin-btn-primary" disabled={submitting}>
+                {submitting ? t('admin.tenants.saving') : t('common.save')}
+              </button>
+            </>
+          }
+        >
+          <form id="tenant-form" onSubmit={submitTenant}>
+            <div className="admin-form-group">
+              <label>{t('admin.tenants.name')}</label>
+              <input className="admin-form-input" value={formName} onChange={(e) => setFormName(e.target.value)} required maxLength={255} />
+            </div>
+            <div className="admin-form-group">
+              <label>{t('admin.tenants.plan')}</label>
+              <AdminSelect
+                value={formPlanId ? { value: formPlanId, label: plans.find(p => p.id === formPlanId)?.name || '' } : null}
+                onChange={(opt: any) => setFormPlanId(opt ? opt.value : '')}
+                options={plans.map(p => ({ value: p.id, label: p.name }))}
+                placeholder={t('admin.tenants.choosePlan')}
+                isClearable
+              />
+            </div>
+            <label className="admin-checkbox-label">
+              <input type="checkbox" checked={formActive} onChange={(e) => setFormActive(e.target.checked)} />
+              {t('common.active')}
+            </label>
+          </form>
+        </AdminModal>
+      )}
 
       {/* Tenant Detail Modal */}
       {showDetail && selectedTenant && (
