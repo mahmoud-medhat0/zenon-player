@@ -35,6 +35,19 @@ export default function Library() {
   // Video Player State
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
 
+  const refreshVideosTable = () => {
+    try {
+      if (tableApi?.ajax?.reload) {
+        tableApi.ajax.reload(null, false);
+      } else {
+        window.location.reload();
+      }
+    } catch {
+      // DataTables may still hold the instance from the previous language.
+      window.location.reload();
+    }
+  };
+
   const hasFeature = (key: string) => {
     if (!user || !user.tenant || !user.tenant.plan) return false;
     if (!user.tenant.plan.is_active || !user.tenant.is_active) return false;
@@ -70,9 +83,7 @@ export default function Library() {
         });
       }
 
-      if (tableApi) {
-        tableApi.draw(false);
-      }
+      refreshVideosTable();
       setEditingVideo(null);
       setThumbnailFile(null);
       showSuccess(t('dashboard.toasts.videoUpdated'));
@@ -134,7 +145,7 @@ export default function Library() {
             axios.delete(`/api/videos/${videoId}`)
               .then(() => {
                 showSuccess(t('dashboard.toasts.videoDeleted'));
-                if (tableApi) tableApi.draw(false);
+                refreshVideosTable();
               })
               .catch(err => {
                 showError(t('dashboard.toasts.videoDeleteFailed'));
