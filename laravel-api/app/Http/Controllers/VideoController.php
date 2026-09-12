@@ -63,7 +63,7 @@ class VideoController extends Controller
         // Now dispatched to a background job to avoid slowing down the AJAX datatables request.
         \App\Jobs\SyncBunnyVideoStatuses::dispatchAfterResponse();
 
-        $query = Video::with('tenant');
+        $query = Video::where('tenant_id', $request->user()->tenant_id)->with('tenant');
 
         return DataTables::of($query)
             ->addColumn('thumbnail', function($video) {
@@ -213,7 +213,7 @@ class VideoController extends Controller
 
     public function uploadThumbnail(Request $request, $id)
     {
-        $video = Video::findOrFail($id);
+        $video = Video::where('tenant_id', $request->user()->tenant_id)->findOrFail($id);
 
         $request->validate([
             'thumbnail' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048',
@@ -243,7 +243,7 @@ class VideoController extends Controller
 
     public function update(Request $request, $id)
     {
-        $video = Video::findOrFail($id);
+        $video = Video::where('tenant_id', request()->user()->tenant_id)->findOrFail($id);
 
         $rules = [
             'title' => 'required|string|max:255',
@@ -269,7 +269,7 @@ class VideoController extends Controller
 
     public function destroy($id)
     {
-        $video = Video::findOrFail($id);
+        $video = Video::where('tenant_id', request()->user()->tenant_id)->findOrFail($id);
 
         if ($video->cloudflare_uid) {
             $accountId = config('video.cloudflare.account_id');
@@ -371,7 +371,7 @@ class VideoController extends Controller
      */
     public function generateToken(Request $request, $id)
     {
-        $video = Video::findOrFail($id);
+        $video = Video::where('tenant_id', $request->user()->tenant_id)->findOrFail($id);
 
         // Generate a random 32 character token
         $token = bin2hex(random_bytes(16));

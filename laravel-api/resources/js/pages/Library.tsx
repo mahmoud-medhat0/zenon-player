@@ -258,6 +258,7 @@ export default function Library() {
 
       <div style={{ width: '100%', background: 'rgba(255,255,255,0.02)', borderRadius: '16px', border: '1px solid var(--border-color)', padding: '24px' }}>
         <DataTable
+          key={i18n.language}
           ajax={async (data: any, callback: any) => {
             try {
               const params = new URLSearchParams();
