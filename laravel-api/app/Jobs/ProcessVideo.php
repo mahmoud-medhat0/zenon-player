@@ -120,6 +120,8 @@ class ProcessVideo implements ShouldQueue
                 'duration_seconds' => $durationInSeconds,
             ]);
 
+            SendTenantWebhook::dispatch($this->video->fresh(), 'video.ready');
+
             Log::info("Video processing completed successfully for Video ID: {$this->video->id}");
 
         } catch (Throwable $e) {

@@ -165,10 +165,16 @@ class VideoUploadController extends Controller
 
         $processor = config('video.processor');
         if ($processor === 'bunny') {
-            \App\Jobs\UploadToBunny::dispatch($video);
+            // A synchronous queue must not turn a successfully confirmed upload into a 500
+            // merely because transcoding/uploading takes time or fails afterwards.
+            \App\Jobs\UploadToBunny::dispatchAfterResponse($video);
         } else {
-            \App\Jobs\ProcessVideo::dispatch($video);
+            \App\Jobs\ProcessVideo::dispatchAfterResponse($video);
         }
+
+        // The tenant callback is the integration point for clients. It reports that the bytes
+        // were accepted; video.ready is sent by the processor once HLS is actually available.
+        \App\Jobs\SendTenantWebhook::dispatchAfterResponse($video->fresh(), 'video.processing');
 
         return response()->json([
             'message' => 'Upload confirmed and processing started',
