@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { AlertTriangle, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, Loader2, RotateCcw, RotateCw } from 'lucide-react';
+import { AlertTriangle, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, Loader2, RotateCcw, RotateCw, Gauge } from 'lucide-react';
+
+const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const DOUBLE_CLICK_MS = 300;
+const SKIP_SECONDS = 10;
 
 interface VideoPlayerProps {
   videoId: string;
@@ -24,9 +28,14 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const controlsTimeoutRef = useRef<number | null>(null);
+  const clickTimeoutRef = useRef<number | null>(null);
+  const lastClickRef = useRef<{ time: number; side: 'left' | 'center' | 'right' } | null>(null);
+  const playbackRateRef = useRef<number>(1);
 
   const [levels, setLevels] = useState<number[]>([]);
   const [selectedLevel, setSelectedLevel] = useState<number>(-1);
+  const [playbackRate, setPlaybackRate] = useState<number>(1);
+  const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -136,6 +145,10 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
       showPlaybackError('This browser cannot play this video stream.');
     }
 
+    const applyPlaybackRate = () => {
+      video.playbackRate = playbackRateRef.current;
+    };
+
     const handleTimeUpdate = () => setCurrentTime(video.currentTime);
     const handleDurationChange = () => setDuration(video.duration);
     const handlePlay = () => setIsPlaying(true);
@@ -153,6 +166,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
     video.addEventListener('waiting', handleWaiting);
     video.addEventListener('playing', handlePlaying);
     video.addEventListener('error', handleVideoError);
+    video.addEventListener('loadedmetadata', applyPlaybackRate);
 
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
@@ -162,6 +176,11 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
       video.removeEventListener('error', handleVideoError);
+      video.removeEventListener('loadedmetadata', applyPlaybackRate);
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current);
+        clickTimeoutRef.current = null;
+      }
       if (nativeMetadataHandler) {
         video.removeEventListener('loadedmetadata', nativeMetadataHandler);
       }
@@ -190,6 +209,58 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
         });
       }
     }
+  };
+
+  // Single click toggles play/pause. A second click on the same side within
+  // DOUBLE_CLICK_MS skips 10s (left = back, right = forward) instead.
+  const handleVideoClick = (e: React.MouseEvent<HTMLVideoElement>) => {
+    const rect = playerContainerRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) {
+      togglePlay();
+      return;
+    }
+
+    const relativeX = (e.clientX - rect.left) / rect.width;
+    const side: 'left' | 'center' | 'right' = relativeX < 0.4 ? 'left' : relativeX > 0.6 ? 'right' : 'center';
+    const now = Date.now();
+    const last = lastClickRef.current;
+
+    if (last && side !== 'center' && last.side === side && now - last.time < DOUBLE_CLICK_MS) {
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current);
+        clickTimeoutRef.current = null;
+      }
+      lastClickRef.current = null;
+
+      if (!playbackError) {
+        if (side === 'left') {
+          skipBackward();
+        } else {
+          skipForward();
+        }
+      }
+      return;
+    }
+
+    lastClickRef.current = { time: now, side };
+
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+    }
+    clickTimeoutRef.current = window.setTimeout(() => {
+      clickTimeoutRef.current = null;
+      lastClickRef.current = null;
+      togglePlay();
+    }, DOUBLE_CLICK_MS);
+  };
+
+  const handlePlaybackRateChange = (rate: number) => {
+    setPlaybackRate(rate);
+    playbackRateRef.current = rate;
+    if (videoRef.current) {
+      videoRef.current.playbackRate = rate;
+    }
+    setIsSpeedMenuOpen(false);
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -271,6 +342,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
       if (isPlaying) {
         setShowControls(false);
         setIsQualityMenuOpen(false);
+        setIsSpeedMenuOpen(false);
       }
     }, 3000);
   };
@@ -279,6 +351,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
     if (isPlaying) {
       setShowControls(false);
       setIsQualityMenuOpen(false);
+      setIsSpeedMenuOpen(false);
     }
   };
 
@@ -324,7 +397,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
 
       <video
         ref={videoRef}
-        onClick={togglePlay}
+        onClick={handleVideoClick}
         playsInline
         poster={thumbnailUrl || undefined}
         style={{ width: '100%', height: '100%', outline: 'none', objectFit: 'contain', cursor: 'pointer', backgroundColor: 'transparent' }}
@@ -381,11 +454,37 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
           </div>
 
           <div className="controls-right">
+            <div className="quality-selector-container">
+              <button
+                className="control-btn quality-btn"
+                title="Playback speed"
+                onClick={(e) => { e.stopPropagation(); setIsQualityMenuOpen(false); setIsSpeedMenuOpen(!isSpeedMenuOpen); }}
+              >
+                <Gauge size={20} />
+                <span className="quality-label">{playbackRate === 1 ? '1x' : `${playbackRate}x`}</span>
+              </button>
+
+              {isSpeedMenuOpen && (
+                <div className="quality-menu">
+                  {PLAYBACK_SPEEDS.map((rate) => (
+                    <button
+                      key={rate}
+                      onClick={(e) => { e.stopPropagation(); handlePlaybackRateChange(rate); }}
+                      className={`quality-menu-item ${playbackRate === rate ? 'active' : ''}`}
+                    >
+                      <span>{rate === 1 ? 'Normal' : `${rate}x`}</span>
+                      {playbackRate === rate && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {levels.length > 0 && (
               <div className="quality-selector-container">
                 <button
                   className="control-btn quality-btn"
-                  onClick={(e) => { e.stopPropagation(); setIsQualityMenuOpen(!isQualityMenuOpen); }}
+                  onClick={(e) => { e.stopPropagation(); setIsSpeedMenuOpen(false); setIsQualityMenuOpen(!isQualityMenuOpen); }}
                 >
                   <Settings size={20} />
                   <span className="quality-label">{selectedLevel === -1 ? 'Auto' : `${levels[selectedLevel]}p`}</span>
