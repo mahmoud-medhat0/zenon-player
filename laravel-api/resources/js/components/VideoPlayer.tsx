@@ -578,16 +578,12 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
       onMouseLeave={handleMouseLeave}
       style={{ position: 'relative', overflow: 'hidden', backgroundColor: '#000', borderRadius: isFullscreen || isEmbed ? '0' : '12px', width: isEmbed ? '100vw' : undefined, height: isEmbed ? '100vh' : undefined, '--primary': primaryColor || '#4f46e5' } as React.CSSProperties}
     >
-      {isBuffering && !playbackError && (
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5, pointerEvents: 'none' }}>
+      {(isBuffering || isReconnecting) && !playbackError && (
+        <div className={`player-loading-overlay ${isReconnecting ? 'reconnecting' : ''}`} role="status">
           <Loader2 className="spinner" size={48} color={primaryColor || "#4f46e5"} />
-        </div>
-      )}
-
-      {isReconnecting && !playbackError && (
-        <div className="player-reconnecting-badge" role="status">
-          <Loader2 className="spinner" size={16} />
-          <span>Reconnecting...</span>
+          {isReconnecting && (
+            <span className="player-reconnecting-text">Reconnecting...</span>
+          )}
         </div>
       )}
 
