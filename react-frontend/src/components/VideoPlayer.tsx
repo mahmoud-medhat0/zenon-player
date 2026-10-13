@@ -23,6 +23,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEm
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const controlsTimeoutRef = useRef<number | null>(null);
+  const savedTimeRef = useRef<number>(0);
+  const wasPlayingRef = useRef<boolean>(true);
+  const isReconnectingRef = useRef<boolean>(false);
+  const playbackErrorRef = useRef<string | null>(null);
+  const networkRetryTimerRef = useRef<number | null>(null);
 
   const [levels, setLevels] = useState<number[]>([]);
   const [selectedLevel, setSelectedLevel] = useState<number>(-1);
@@ -34,9 +39,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEm
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isBuffering, setIsBuffering] = useState(true);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(false);
   const [skipAnimation, setSkipAnimation] = useState<'forward' | 'backward' | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+
+  // Keep ref synchronized with state for event listeners
+  playbackErrorRef.current = playbackError;
+  isReconnectingRef.current = isReconnecting;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -49,15 +60,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEm
     let nativeMetadataHandler: (() => void) | null = null;
     let networkRecoveryAttempts = 0;
     let mediaRecoveryAttempts = 0;
+    const MAX_NETWORK_RETRIES = 10;
+    const MAX_MEDIA_RETRIES = 2;
 
     setPlaybackError(null);
+    playbackErrorRef.current = null;
     setIsBuffering(true);
     setLevels([]);
     setSelectedLevel(-1);
 
     const showPlaybackError = (message: string) => {
       setPlaybackError(message);
+      playbackErrorRef.current = message;
       setIsBuffering(false);
+      setIsReconnecting(false);
+      isReconnectingRef.current = false;
+      if (networkRetryTimerRef.current) {
+        clearTimeout(networkRetryTimerRef.current);
+        networkRetryTimerRef.current = null;
+      }
       if (hls) {
         hls.destroy();
         hls = null;
@@ -70,8 +91,45 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEm
       return;
     }
 
+    const handleSuccessfulLoad = () => {
+      networkRecoveryAttempts = 0;
+      mediaRecoveryAttempts = 0;
+      setIsReconnecting(false);
+      isReconnectingRef.current = false;
+      setIsBuffering(false);
+      if (networkRetryTimerRef.current) {
+        clearTimeout(networkRetryTimerRef.current);
+        networkRetryTimerRef.current = null;
+      }
+    };
+
     if (Hls.isSupported()) {
       hls = new Hls({
+        manifestLoadingTimeOut: 20000,
+        manifestLoadingMaxRetry: 10,
+        manifestLoadingRetryDelay: 1000,
+        manifestLoadingMaxRetryTimeout: 64000,
+
+        levelLoadingTimeOut: 20000,
+        levelLoadingMaxRetry: 10,
+        levelLoadingRetryDelay: 1000,
+        levelLoadingMaxRetryTimeout: 64000,
+
+        fragLoadingTimeOut: 25000,
+        fragLoadingMaxRetry: 10,
+        fragLoadingRetryDelay: 1000,
+        fragLoadingMaxRetryTimeout: 64000,
+
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        backBufferLength: 30,
+
+        startLevel: -1,
+        autoStartLoad: true,
+        capLevelToPlayerSize: true,
+        enableWorker: true,
+        lowLatencyMode: false,
+
         xhrSetup: (xhr) => {
           if (token) {
             xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -82,32 +140,70 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEm
 
       hls.loadSource(resolvedStreamUrl);
       hls.attachMedia(video);
+
       hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
         setLevels(data.levels.map((l: any) => l.height));
-        video.play().then(() => setIsPlaying(true)).catch(e => console.error("Autoplay prevented:", e));
+        if (savedTimeRef.current > 0 && video) {
+          try {
+            video.currentTime = savedTimeRef.current;
+          } catch (e) {
+            console.warn('[VideoPlayer] Could not restore currentTime:', e);
+          }
+        }
+        if (wasPlayingRef.current) {
+          video.play().then(() => setIsPlaying(true)).catch(e => console.log('Autoplay prevented:', e));
+        }
       });
-      hls.on(Hls.Events.FRAG_BUFFERED, () => {
-        setIsBuffering(false);
-      });
+
+      hls.on(Hls.Events.FRAG_BUFFERED, handleSuccessfulLoad);
+      hls.on(Hls.Events.FRAG_LOADED, handleSuccessfulLoad);
+
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              if (networkRecoveryAttempts < 2) {
+              if (networkRecoveryAttempts < MAX_NETWORK_RETRIES) {
                 networkRecoveryAttempts += 1;
-                hls?.startLoad();
+                setIsReconnecting(true);
+                isReconnectingRef.current = true;
+                setIsBuffering(true);
+
+                const delay = Math.min(1000 * Math.pow(1.5, networkRecoveryAttempts - 1), 6000);
+                console.warn(`[VideoPlayer] Network error (attempt ${networkRecoveryAttempts}/${MAX_NETWORK_RETRIES}). Retrying in ${delay}ms...`);
+
+                if (networkRetryTimerRef.current) {
+                  clearTimeout(networkRetryTimerRef.current);
+                }
+
+                networkRetryTimerRef.current = window.setTimeout(() => {
+                  if (!hlsRef.current) return;
+                  if (networkRecoveryAttempts >= 4) {
+                    try {
+                      hlsRef.current.recoverMediaError();
+                    } catch {}
+                  }
+                  hlsRef.current.startLoad();
+                }, delay);
                 return;
               }
               showPlaybackError('The video stream could not be loaded. It may be private, unavailable, or blocked by the network.');
               break;
+
             case Hls.ErrorTypes.MEDIA_ERROR:
-              if (mediaRecoveryAttempts < 1) {
+              if (mediaRecoveryAttempts < MAX_MEDIA_RETRIES) {
                 mediaRecoveryAttempts += 1;
-                hls?.recoverMediaError();
+                console.warn(`[VideoPlayer] Media error (attempt ${mediaRecoveryAttempts}/${MAX_MEDIA_RETRIES}). Recovering...`);
+                if (mediaRecoveryAttempts === 1) {
+                  hls?.recoverMediaError();
+                } else {
+                  hls?.swapAudioCodec();
+                  hls?.recoverMediaError();
+                }
                 return;
               }
               showPlaybackError('This video cannot be played in the current browser.');
               break;
+
             default:
               showPlaybackError('Playback failed. Please try again later.');
               break;
@@ -133,23 +229,108 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEm
       } else {
         video.src = resolvedStreamUrl;
       }
+
       nativeMetadataHandler = () => {
-        video.play().then(() => setIsPlaying(true)).catch(e => console.error("Autoplay prevented:", e));
+        if (savedTimeRef.current > 0) {
+          try {
+            video.currentTime = savedTimeRef.current;
+          } catch {}
+        }
+        if (wasPlayingRef.current) {
+          video.play().then(() => setIsPlaying(true)).catch(e => console.log('Autoplay prevented:', e));
+        }
       };
       video.addEventListener('loadedmetadata', nativeMetadataHandler);
     } else {
       showPlaybackError('This browser cannot play this video stream.');
     }
 
-    const handleTimeUpdate = () => setCurrentTime(video.currentTime);
+    const handleTimeUpdate = () => {
+      if (video.currentTime > 0) {
+        savedTimeRef.current = video.currentTime;
+      }
+      setCurrentTime(video.currentTime);
+    };
+
     const handleDurationChange = () => setDuration(video.duration);
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handlePlay = () => {
+      wasPlayingRef.current = true;
+      setIsPlaying(true);
+    };
+    const handlePause = () => {
+      if (!isReconnectingRef.current) {
+        wasPlayingRef.current = false;
+      }
+      setIsPlaying(false);
+    };
     const handleWaiting = () => setIsBuffering(true);
-    const handlePlaying = () => setIsBuffering(false);
+    const handlePlaying = () => handleSuccessfulLoad();
+    const handleStalled = () => {
+      setIsBuffering(true);
+      if (hlsRef.current && !isReconnectingRef.current) {
+        hlsRef.current.startLoad();
+      }
+    };
+
     const handleVideoError = () => {
+      if (hlsRef.current) return;
+
+      if (networkRecoveryAttempts < MAX_NETWORK_RETRIES) {
+        networkRecoveryAttempts += 1;
+        setIsReconnecting(true);
+        isReconnectingRef.current = true;
+        setIsBuffering(true);
+        const delay = Math.min(1000 * Math.pow(1.5, networkRecoveryAttempts - 1), 6000);
+        setTimeout(() => {
+          if (video) {
+            if (savedTimeRef.current > 0) {
+              try { video.currentTime = savedTimeRef.current; } catch {}
+            }
+            video.load();
+            if (wasPlayingRef.current) {
+              video.play().catch(() => {});
+            }
+          }
+        }, delay);
+        return;
+      }
+
       showPlaybackError('The video stream could not be loaded. It may be private, unavailable, or blocked by the network.');
     };
+
+    const handleOnline = () => {
+      console.log('[VideoPlayer] Browser went online. Recovering stream...');
+      networkRecoveryAttempts = 0;
+      mediaRecoveryAttempts = 0;
+      if (playbackErrorRef.current) {
+        setPlaybackError(null);
+        playbackErrorRef.current = null;
+        setIsBuffering(true);
+        setIsReconnecting(true);
+        isReconnectingRef.current = true;
+        setRetryKey(k => k + 1);
+      } else if (hlsRef.current) {
+        setIsReconnecting(true);
+        isReconnectingRef.current = true;
+        setIsBuffering(true);
+        hlsRef.current.startLoad();
+        if (wasPlayingRef.current && videoRef.current) {
+          videoRef.current.play().catch(() => {});
+        }
+      } else if (videoRef.current) {
+        setRetryKey(k => k + 1);
+      }
+    };
+
+    const handleOffline = () => {
+      console.log('[VideoPlayer] Browser went offline.');
+      setIsReconnecting(true);
+      isReconnectingRef.current = true;
+      setIsBuffering(true);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('durationchange', handleDurationChange);
@@ -157,15 +338,23 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEm
     video.addEventListener('pause', handlePause);
     video.addEventListener('waiting', handleWaiting);
     video.addEventListener('playing', handlePlaying);
+    video.addEventListener('stalled', handleStalled);
     video.addEventListener('error', handleVideoError);
 
     return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      if (networkRetryTimerRef.current) {
+        clearTimeout(networkRetryTimerRef.current);
+        networkRetryTimerRef.current = null;
+      }
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('durationchange', handleDurationChange);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
+      video.removeEventListener('stalled', handleStalled);
       video.removeEventListener('error', handleVideoError);
       if (nativeMetadataHandler) {
         video.removeEventListener('loadedmetadata', nativeMetadataHandler);
@@ -181,17 +370,29 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEm
         clearTimeout(controlsTimeoutRef.current);
       }
     };
-  }, [videoId, token, streamUrl]);
+  }, [videoId, token, streamUrl, retryKey]);
+
+  const handleManualRetry = () => {
+    setPlaybackError(null);
+    playbackErrorRef.current = null;
+    setIsBuffering(true);
+    setIsReconnecting(true);
+    isReconnectingRef.current = true;
+    setRetryKey(k => k + 1);
+  };
 
   const togglePlay = () => {
     const video = videoRef.current;
     if (video && !playbackError) {
       if (isPlaying) {
         video.pause();
+        wasPlayingRef.current = false;
       } else {
-        video.play().catch(() => {
-          setPlaybackError('Playback could not start. Please try again.');
-          setIsBuffering(false);
+        wasPlayingRef.current = true;
+        video.play().catch((err) => {
+          if (err?.name !== 'AbortError' && err?.name !== 'NotAllowedError') {
+            console.error('Play error:', err);
+          }
         });
       }
     }
@@ -304,8 +505,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEm
           style={{ position: 'relative', overflow: 'hidden', backgroundColor: '#000', borderRadius: isFullscreen || isEmbed ? '0' : '12px', width: isEmbed ? '100vw' : undefined, height: isEmbed ? '100vh' : undefined, '--primary': primaryColor || '#4f46e5' } as React.CSSProperties}
         >
           {isBuffering && !playbackError && (
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5 }}>
-              <Loader2 className="spinner" size={48} color="#4f46e5" />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5, pointerEvents: 'none' }}>
+              <Loader2 className="spinner" size={48} color={primaryColor || "#4f46e5"} />
+            </div>
+          )}
+
+          {isReconnecting && !playbackError && (
+            <div className="player-reconnecting-badge" role="status">
+              <Loader2 className="spinner" size={16} />
+              <span>Reconnecting...</span>
             </div>
           )}
 
@@ -314,7 +522,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoId, token, onClose, isEm
               <AlertTriangle className="player-error-icon" size={34} />
               <div className="player-error-title">Video unavailable</div>
               <div className="player-error-message">{playbackError}</div>
-              <button className="player-error-retry" type="button" onClick={() => window.location.reload()}>
+              <button className="player-error-retry" type="button" onClick={handleManualRetry}>
                 Try again
               </button>
             </div>
