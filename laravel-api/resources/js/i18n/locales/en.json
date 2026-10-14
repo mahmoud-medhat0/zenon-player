@@ -466,5 +466,53 @@
     "videoFailed": "This video could not be processed.",
     "videoBandwidthLimitReached": "This video is temporarily unavailable because its workspace has reached its plan's bandwidth limit.",
     "failedToLoad": "Failed to load video. Please try again later."
+  },
+  "player": {
+    "auto": "Auto",
+    "reconnecting": "Reconnecting...",
+    "tryAgain": "Try again",
+    "offlineWaiting": "No internet connection. Playback will resume when you're back online.",
+    "offlineBuffered": "You're offline. Playing buffered video.",
+    "slowConnection": "Slow connection detected",
+    "slowConnectionLowered": "Slow connection: quality lowered to {{quality}}",
+    "errorCode": "Error code: {{code}}",
+    "errors": {
+      "notReady": {
+        "title": "Video not ready",
+        "message": "This video is not ready to play yet."
+      },
+      "unsupported": {
+        "title": "Format not supported",
+        "message": "This browser cannot play this video stream. Try a different browser."
+      },
+      "decode": {
+        "title": "Playback error",
+        "message": "The video data could not be decoded in this browser."
+      },
+      "forbidden": {
+        "title": "Access denied",
+        "message": "You don't have permission to watch this video, the video is private, or its workspace reached its bandwidth limit."
+      },
+      "notFound": {
+        "title": "Video not found",
+        "message": "This video was deleted or is still being processed."
+      },
+      "server": {
+        "title": "Server error",
+        "message": "The video server is having trouble right now. Please try again in a moment."
+      },
+      "timeout": {
+        "title": "Connection too slow",
+        "message": "Your internet connection is too slow to load the video, even at the lowest quality. Check your connection and try again."
+      },
+      "network": {
+        "title": "Connection interrupted",
+        "message": "The connection to the video server was lost. Check your internet connection and try again."
+      },
+      "unknown": {
+        "title": "Video unavailable",
+        "message": "Playback failed. Please try again later."
+      }
+    }
   }
 }

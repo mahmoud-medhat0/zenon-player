@@ -1,10 +1,80 @@
 import { useEffect, useRef, useState } from 'react';
-import Hls from 'hls.js';
-import { AlertTriangle, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, Loader2, RotateCcw, RotateCw, Gauge } from 'lucide-react';
+import Hls, { type ErrorData } from 'hls.js';
+import { useTranslation } from 'react-i18next';
+import { AlertTriangle, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, Loader2, RotateCcw, RotateCw, Gauge, WifiOff, Wifi } from 'lucide-react';
 
 const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const DOUBLE_CLICK_MS = 300;
 const SKIP_SECONDS = 10;
+
+const MAX_NETWORK_RETRIES = 8;
+const MAX_MEDIA_RETRIES = 2;
+// Buffering longer than this (while online) is treated as a slow connection.
+const SLOW_BUFFER_MS = 5000;
+// Stalls inside this window count towards "unstable connection".
+const STALL_WINDOW_MS = 60000;
+const UNSTABLE_STALL_COUNT = 2;
+// How long playback must run without stalls before ABR is allowed to climb aggressively again.
+const STABLE_RECOVERY_MS = 90000;
+const SLOW_NOTICE_MS = 4000;
+
+// ABR bandwidth safety factors: default vs. when the connection is unstable.
+const ABR_FACTORS_STABLE = { down: 0.8, up: 0.6 };
+const ABR_FACTORS_UNSTABLE = { down: 0.6, up: 0.35 };
+
+type PlaybackErrorKind = 'notReady' | 'unsupported' | 'decode' | 'forbidden' | 'notFound' | 'server' | 'timeout' | 'network' | 'unknown';
+
+interface PlaybackError {
+  kind: PlaybackErrorKind;
+  // Technical detail shown under the message (HTTP status / hls.js error detail).
+  code?: string;
+}
+
+const TIMEOUT_DETAILS = new Set<string>([
+  Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT,
+  Hls.ErrorDetails.LEVEL_LOAD_TIMEOUT,
+  Hls.ErrorDetails.FRAG_LOAD_TIMEOUT,
+  Hls.ErrorDetails.KEY_LOAD_TIMEOUT,
+]);
+
+interface NetworkInformationLike extends EventTarget {
+  downlink?: number;
+  effectiveType?: string;
+  saveData?: boolean;
+}
+
+const getConnection = (): NetworkInformationLike | undefined =>
+  (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
+
+// Seed the ABR estimator from the browser's connection hint so the first
+// fragment is fetched at a quality the connection can actually sustain.
+const getInitialBandwidthEstimate = () => {
+  const connection = getConnection();
+  if (connection?.downlink) {
+    return Math.max(connection.downlink * 1_000_000 * 0.7, 150_000);
+  }
+  if (connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g') return 150_000;
+  if (connection?.effectiveType === '3g') return 700_000;
+  return 1_000_000;
+};
+
+const getHttpStatus = (data: ErrorData): number | undefined => {
+  const status = data.response?.code ?? (data.networkDetails as XMLHttpRequest | undefined)?.status;
+  return typeof status === 'number' && status > 0 ? status : undefined;
+};
+
+const classifyNetworkError = (status: number | undefined, details: string): PlaybackErrorKind => {
+  if (status === 401 || status === 403) return 'forbidden';
+  if (status === 404 || status === 410) return 'notFound';
+  if (status && status >= 500) return 'server';
+  if (TIMEOUT_DETAILS.has(details)) return 'timeout';
+  return 'network';
+};
+
+const isRetryable = (kind: PlaybackErrorKind) => kind === 'server' || kind === 'timeout' || kind === 'network';
+
+const formatErrorCode = (status: number | undefined, details?: string) =>
+  [status ? `HTTP ${status}` : null, details].filter(Boolean).join(' · ') || undefined;
 
 interface VideoPlayerProps {
   videoId: string;
@@ -24,6 +94,7 @@ const formatTime = (time: number) => {
 };
 
 export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, primaryColor, streamUrl, thumbnailUrl }: VideoPlayerProps) {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -34,11 +105,12 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
   const savedTimeRef = useRef<number>(0);
   const wasPlayingRef = useRef<boolean>(true);
   const isReconnectingRef = useRef<boolean>(false);
-  const playbackErrorRef = useRef<string | null>(null);
+  const playbackErrorRef = useRef<PlaybackError | null>(null);
   const networkRetryTimerRef = useRef<number | null>(null);
 
   const [levels, setLevels] = useState<number[]>([]);
   const [selectedLevel, setSelectedLevel] = useState<number>(-1);
+  const [autoLevelHeight, setAutoLevelHeight] = useState<number | null>(null);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -50,9 +122,11 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
   const [showControls, setShowControls] = useState(true);
   const [isBuffering, setIsBuffering] = useState(true);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [isOffline, setIsOffline] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false);
+  const [slowNotice, setSlowNotice] = useState<string | null>(null);
   const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(false);
   const [skipAnimation, setSkipAnimation] = useState<'forward' | 'backward' | null>(null);
-  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [playbackError, setPlaybackError] = useState<PlaybackError | null>(null);
   const [retryKey, setRetryKey] = useState(0);
 
   // Keep ref synchronized with state for event listeners
@@ -69,25 +143,39 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
     let nativeMetadataHandler: (() => void) | null = null;
     let networkRecoveryAttempts = 0;
     let mediaRecoveryAttempts = 0;
-    const MAX_NETWORK_RETRIES = 10;
-    const MAX_MEDIA_RETRIES = 2;
+    let levelHeights: number[] = [];
+    let stallTimes: number[] = [];
+    let isUnstable = false;
+    let slowBufferTimer: number | null = null;
+    let stableRecoveryTimer: number | null = null;
+    let slowNoticeTimer: number | null = null;
 
     setPlaybackError(null);
     playbackErrorRef.current = null;
     setIsBuffering(true);
     setLevels([]);
     setSelectedLevel(-1);
+    setAutoLevelHeight(null);
+    setSlowNotice(null);
 
-    const showPlaybackError = (message: string) => {
-      setPlaybackError(message);
-      playbackErrorRef.current = message;
+    const clearTimer = (timer: number | null) => {
+      if (timer) clearTimeout(timer);
+      return null;
+    };
+
+    const setReconnecting = (value: boolean) => {
+      setIsReconnecting(value);
+      isReconnectingRef.current = value;
+    };
+
+    const showPlaybackError = (error: PlaybackError) => {
+      console.warn('[VideoPlayer] Playback error:', error);
+      setPlaybackError(error);
+      playbackErrorRef.current = error;
       setIsBuffering(false);
-      setIsReconnecting(false);
-      isReconnectingRef.current = false;
-      if (networkRetryTimerRef.current) {
-        clearTimeout(networkRetryTimerRef.current);
-        networkRetryTimerRef.current = null;
-      }
+      setReconnecting(false);
+      slowBufferTimer = clearTimer(slowBufferTimer);
+      networkRetryTimerRef.current = clearTimer(networkRetryTimerRef.current);
       if (hls) {
         hls.destroy();
         hls = null;
@@ -96,36 +184,103 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
     };
 
     if (!resolvedStreamUrl) {
-      showPlaybackError('This video is not ready to play yet.');
+      showPlaybackError({ kind: 'notReady' });
       return;
     }
+
+    const flashSlowNotice = (message: string) => {
+      setSlowNotice(message);
+      slowNoticeTimer = clearTimer(slowNoticeTimer);
+      slowNoticeTimer = window.setTimeout(() => setSlowNotice(null), SLOW_NOTICE_MS);
+    };
+
+    const applyAbrFactors = (unstable: boolean) => {
+      if (!hls) return;
+      const factors = unstable ? ABR_FACTORS_UNSTABLE : ABR_FACTORS_STABLE;
+      // hls.js reads these from config on every ABR decision, so changing them live takes effect immediately.
+      hls.config.abrBandWidthFactor = factors.down;
+      hls.config.abrBandWidthUpFactor = factors.up;
+    };
+
+    // Called whenever playback stalls or a fragment is too slow. In Auto mode
+    // we step one rendition down right away, and if stalls keep happening we
+    // make ABR more conservative so it stops bouncing back up to a quality
+    // the connection can't hold.
+    const handleConnectionStruggle = () => {
+      if (!hls || !hls.autoLevelEnabled || !navigator.onLine) return;
+
+      const now = Date.now();
+      stallTimes = stallTimes.filter(time => now - time < STALL_WINDOW_MS);
+      stallTimes.push(now);
+
+      if (!isUnstable && stallTimes.length >= UNSTABLE_STALL_COUNT) {
+        isUnstable = true;
+        applyAbrFactors(true);
+      }
+
+      stableRecoveryTimer = clearTimer(stableRecoveryTimer);
+      stableRecoveryTimer = window.setTimeout(() => {
+        isUnstable = false;
+        stallTimes = [];
+        applyAbrFactors(false);
+      }, STABLE_RECOVERY_MS);
+
+      const current = hls.currentLevel >= 0 ? hls.currentLevel : hls.nextLoadLevel;
+      const target = Math.max(current - 1, hls.minAutoLevel);
+      if (current >= 0 && target < current) {
+        hls.nextAutoLevel = target;
+        const height = levelHeights[target];
+        flashSlowNotice(height ? t('player.slowConnectionLowered', { quality: `${height}p` }) : t('player.slowConnection'));
+      } else {
+        flashSlowNotice(t('player.slowConnection'));
+      }
+    };
+
+    const startSlowBufferWatch = () => {
+      if (slowBufferTimer) return;
+      slowBufferTimer = window.setTimeout(() => {
+        slowBufferTimer = null;
+        if (!navigator.onLine) return;
+        if (hls) {
+          handleConnectionStruggle();
+        } else {
+          flashSlowNotice(t('player.slowConnection'));
+        }
+      }, SLOW_BUFFER_MS);
+    };
 
     const handleSuccessfulLoad = () => {
       networkRecoveryAttempts = 0;
       mediaRecoveryAttempts = 0;
-      setIsReconnecting(false);
-      isReconnectingRef.current = false;
+      setReconnecting(false);
+      setIsOffline(false);
       setIsBuffering(false);
-      if (networkRetryTimerRef.current) {
-        clearTimeout(networkRetryTimerRef.current);
-        networkRetryTimerRef.current = null;
-      }
+      slowBufferTimer = clearTimer(slowBufferTimer);
+      networkRetryTimerRef.current = clearTimer(networkRetryTimerRef.current);
+    };
+
+    const enterOfflineState = () => {
+      setIsOffline(true);
+      setReconnecting(true);
+      setIsBuffering(true);
+      slowBufferTimer = clearTimer(slowBufferTimer);
+      networkRetryTimerRef.current = clearTimer(networkRetryTimerRef.current);
     };
 
     if (Hls.isSupported()) {
       hls = new Hls({
         manifestLoadingTimeOut: 20000,
-        manifestLoadingMaxRetry: 10,
+        manifestLoadingMaxRetry: 6,
         manifestLoadingRetryDelay: 1000,
         manifestLoadingMaxRetryTimeout: 64000,
 
         levelLoadingTimeOut: 20000,
-        levelLoadingMaxRetry: 10,
+        levelLoadingMaxRetry: 6,
         levelLoadingRetryDelay: 1000,
         levelLoadingMaxRetryTimeout: 64000,
 
         fragLoadingTimeOut: 25000,
-        fragLoadingMaxRetry: 10,
+        fragLoadingMaxRetry: 6,
         fragLoadingRetryDelay: 1000,
         fragLoadingMaxRetryTimeout: 64000,
 
@@ -133,9 +288,17 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
         maxMaxBufferLength: 60,
         backBufferLength: 30,
 
+        // Adaptive bitrate: start from the browser's bandwidth hint, measure the
+        // first fragment, and keep headroom so a dip doesn't cause a stall.
         startLevel: -1,
-        autoStartLoad: true,
+        testBandwidth: true,
+        abrEwmaDefaultEstimate: getInitialBandwidthEstimate(),
+        abrBandWidthFactor: ABR_FACTORS_STABLE.down,
+        abrBandWidthUpFactor: ABR_FACTORS_STABLE.up,
+        abrMaxWithRealBitrate: true,
         capLevelToPlayerSize: true,
+
+        autoStartLoad: true,
         enableWorker: true,
         lowLatencyMode: false,
 
@@ -151,7 +314,8 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
-        setLevels(data.levels.map((l: any) => l.height));
+        levelHeights = data.levels.map(level => level.height);
+        setLevels(levelHeights);
         if (savedTimeRef.current > 0 && video) {
           try {
             video.currentTime = savedTimeRef.current;
@@ -164,71 +328,104 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
         }
       });
 
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
+        setAutoLevelHeight(levelHeights[data.level] ?? null);
+      });
+
       hls.on(Hls.Events.FRAG_BUFFERED, handleSuccessfulLoad);
       hls.on(Hls.Events.FRAG_LOADED, handleSuccessfulLoad);
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              if (networkRecoveryAttempts < MAX_NETWORK_RETRIES) {
-                networkRecoveryAttempts += 1;
-                setIsReconnecting(true);
-                isReconnectingRef.current = true;
-                setIsBuffering(true);
-
-                const delay = Math.min(1000 * Math.pow(1.5, networkRecoveryAttempts - 1), 6000);
-                console.warn(`[VideoPlayer] Network error (attempt ${networkRecoveryAttempts}/${MAX_NETWORK_RETRIES}). Retrying in ${delay}ms...`);
-
-                if (networkRetryTimerRef.current) {
-                  clearTimeout(networkRetryTimerRef.current);
-                }
-
-                networkRetryTimerRef.current = window.setTimeout(() => {
-                  if (!hlsRef.current) return;
-                  if (networkRecoveryAttempts >= 4) {
-                    try {
-                      hlsRef.current.recoverMediaError();
-                    } catch {}
-                  }
-                  hlsRef.current.startLoad();
-                }, delay);
-                return;
-              }
-              showPlaybackError('The video stream could not be loaded. It may be private, unavailable, or blocked by the network.');
-              break;
-
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              if (mediaRecoveryAttempts < MAX_MEDIA_RETRIES) {
-                mediaRecoveryAttempts += 1;
-                console.warn(`[VideoPlayer] Media error (attempt ${mediaRecoveryAttempts}/${MAX_MEDIA_RETRIES}). Recovering...`);
-                if (mediaRecoveryAttempts === 1) {
-                  hls?.recoverMediaError();
-                } else {
-                  hls?.swapAudioCodec();
-                  hls?.recoverMediaError();
-                }
-                return;
-              }
-              showPlaybackError('This video cannot be played in the current browser.');
-              break;
-
-            default:
-              showPlaybackError('Playback failed. Please try again later.');
-              break;
+        if (!data.fatal) {
+          // Recoverable hiccups that signal a slow/unstable connection.
+          if (
+            data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR ||
+            data.details === Hls.ErrorDetails.FRAG_LOAD_TIMEOUT ||
+            data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR
+          ) {
+            handleConnectionStruggle();
           }
+          return;
+        }
+
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR: {
+            // Connection dropped: wait for the browser's "online" event instead
+            // of burning through retries while there's no network at all.
+            if (!navigator.onLine) {
+              enterOfflineState();
+              return;
+            }
+
+            const status = getHttpStatus(data);
+            const kind = classifyNetworkError(status, data.details);
+            const code = formatErrorCode(status, data.details);
+
+            if (!isRetryable(kind) || networkRecoveryAttempts >= MAX_NETWORK_RETRIES) {
+              showPlaybackError({ kind, code });
+              return;
+            }
+
+            networkRecoveryAttempts += 1;
+            setReconnecting(true);
+            setIsBuffering(true);
+
+            // Repeated failures on a slow link: fall back to the lowest quality
+            // so the next attempt has the best chance of getting through.
+            if (networkRecoveryAttempts >= 2 && hls?.autoLevelEnabled && levelHeights.length > 1) {
+              hls.nextAutoLevel = hls.minAutoLevel;
+              isUnstable = true;
+              applyAbrFactors(true);
+            }
+
+            const delay = Math.min(1000 * Math.pow(1.5, networkRecoveryAttempts - 1), 8000);
+            console.warn(`[VideoPlayer] Network error ${code ?? ''} (attempt ${networkRecoveryAttempts}/${MAX_NETWORK_RETRIES}). Retrying in ${delay}ms...`);
+
+            networkRetryTimerRef.current = clearTimer(networkRetryTimerRef.current);
+            networkRetryTimerRef.current = window.setTimeout(() => {
+              networkRetryTimerRef.current = null;
+              hlsRef.current?.startLoad(savedTimeRef.current > 0 ? savedTimeRef.current : -1);
+            }, delay);
+            return;
+          }
+
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            if (mediaRecoveryAttempts < MAX_MEDIA_RETRIES) {
+              mediaRecoveryAttempts += 1;
+              console.warn(`[VideoPlayer] Media error (attempt ${mediaRecoveryAttempts}/${MAX_MEDIA_RETRIES}). Recovering...`);
+              if (mediaRecoveryAttempts === 1) {
+                hls?.recoverMediaError();
+              } else {
+                hls?.swapAudioCodec();
+                hls?.recoverMediaError();
+              }
+              return;
+            }
+            showPlaybackError({ kind: 'decode', code: data.details });
+            break;
+
+          default:
+            showPlaybackError({ kind: 'unknown', code: data.details });
+            break;
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native HLS (Safari/iOS) does its own adaptive bitrate switching.
       if (token) {
         fetch(resolvedStreamUrl, { headers: { 'Authorization': `Bearer ${token}` } })
           .then(res => {
             if (!res.ok) {
+              const kind = classifyNetworkError(res.status, '');
+              if (!isRetryable(kind)) {
+                showPlaybackError({ kind, code: `HTTP ${res.status}` });
+                return null;
+              }
               throw new Error(`HTTP ${res.status}`);
             }
             return res.blob();
           })
           .then(blob => {
+            if (!blob) return;
             objectUrl = URL.createObjectURL(blob);
             video.src = objectUrl;
           })
@@ -251,7 +448,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
       };
       video.addEventListener('loadedmetadata', nativeMetadataHandler);
     } else {
-      showPlaybackError('This browser cannot play this video stream.');
+      showPlaybackError({ kind: 'unsupported' });
     }
 
     const applyPlaybackRate = () => {
@@ -276,58 +473,76 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
       }
       setIsPlaying(false);
     };
-    const handleWaiting = () => setIsBuffering(true);
+    const handleWaiting = () => {
+      setIsBuffering(true);
+      startSlowBufferWatch();
+    };
     const handlePlaying = () => handleSuccessfulLoad();
     const handleStalled = () => {
       setIsBuffering(true);
-      if (hlsRef.current && !isReconnectingRef.current) {
+      startSlowBufferWatch();
+      if (hlsRef.current && !isReconnectingRef.current && navigator.onLine) {
         hlsRef.current.startLoad();
       }
     };
 
     const handleVideoError = () => {
       // If Hls.js is active, error handling is managed by Hls
-      if (hlsRef.current) return;
+      if (hlsRef.current || playbackErrorRef.current) return;
+
+      const mediaError = video.error;
+      if (mediaError?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+        showPlaybackError({ kind: 'unsupported', code: mediaError.message || 'MEDIA_ERR_SRC_NOT_SUPPORTED' });
+        return;
+      }
+      if (mediaError?.code === MediaError.MEDIA_ERR_DECODE) {
+        showPlaybackError({ kind: 'decode', code: mediaError.message || 'MEDIA_ERR_DECODE' });
+        return;
+      }
+
+      if (!navigator.onLine) {
+        enterOfflineState();
+        return;
+      }
 
       if (networkRecoveryAttempts < MAX_NETWORK_RETRIES) {
         networkRecoveryAttempts += 1;
-        setIsReconnecting(true);
-        isReconnectingRef.current = true;
+        setReconnecting(true);
         setIsBuffering(true);
-        const delay = Math.min(1000 * Math.pow(1.5, networkRecoveryAttempts - 1), 6000);
-        setTimeout(() => {
-          if (video) {
-            if (savedTimeRef.current > 0) {
-              try { video.currentTime = savedTimeRef.current; } catch {}
-            }
-            video.load();
-            if (wasPlayingRef.current) {
-              video.play().catch(() => {});
-            }
+        const delay = Math.min(1000 * Math.pow(1.5, networkRecoveryAttempts - 1), 8000);
+        networkRetryTimerRef.current = clearTimer(networkRetryTimerRef.current);
+        networkRetryTimerRef.current = window.setTimeout(() => {
+          if (savedTimeRef.current > 0) {
+            try { video.currentTime = savedTimeRef.current; } catch {}
+          }
+          video.load();
+          if (wasPlayingRef.current) {
+            video.play().catch(() => {});
           }
         }, delay);
         return;
       }
 
-      showPlaybackError('The video stream could not be loaded. It may be private, unavailable, or blocked by the network.');
+      showPlaybackError({ kind: 'network', code: mediaError?.message || 'MEDIA_ERR_NETWORK' });
     };
 
     const handleOnline = () => {
       console.log('[VideoPlayer] Browser went online. Recovering stream...');
+      setIsOffline(false);
       networkRecoveryAttempts = 0;
       mediaRecoveryAttempts = 0;
       if (playbackErrorRef.current) {
+        // Only auto-recover from errors that a dropped connection could cause.
+        if (!isRetryable(playbackErrorRef.current.kind)) return;
         setPlaybackError(null);
         playbackErrorRef.current = null;
         setIsBuffering(true);
-        setIsReconnecting(true);
-        isReconnectingRef.current = true;
+        setReconnecting(true);
         setRetryKey(k => k + 1);
       } else if (hlsRef.current) {
-        setIsReconnecting(true);
-        isReconnectingRef.current = true;
+        setReconnecting(true);
         setIsBuffering(true);
-        hlsRef.current.startLoad();
+        hlsRef.current.startLoad(savedTimeRef.current > 0 ? savedTimeRef.current : -1);
         if (wasPlayingRef.current && videoRef.current) {
           videoRef.current.play().catch(() => {});
         }
@@ -338,13 +553,27 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
 
     const handleOffline = () => {
       console.log('[VideoPlayer] Browser went offline.');
-      setIsReconnecting(true);
-      isReconnectingRef.current = true;
-      setIsBuffering(true);
+      // Keep playing whatever is already buffered; the overlay only shows once
+      // the buffer runs dry or a request fails.
+      setIsOffline(true);
+    };
+
+    // The browser's own estimate changed (e.g. Wi-Fi → mobile data). If it
+    // dropped below what ABR currently assumes, pull the estimate down so the
+    // next fragment is requested at a sustainable quality.
+    const connection = getConnection();
+    const handleConnectionChange = () => {
+      const activeHls = hlsRef.current;
+      if (!activeHls || !connection?.downlink) return;
+      const hinted = connection.downlink * 1_000_000 * 0.7;
+      if (hinted < activeHls.bandwidthEstimate) {
+        activeHls.bandwidthEstimate = Math.max(hinted, 150_000);
+      }
     };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    connection?.addEventListener('change', handleConnectionChange);
 
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('durationchange', handleDurationChange);
@@ -359,10 +588,11 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      if (networkRetryTimerRef.current) {
-        clearTimeout(networkRetryTimerRef.current);
-        networkRetryTimerRef.current = null;
-      }
+      connection?.removeEventListener('change', handleConnectionChange);
+      networkRetryTimerRef.current = clearTimer(networkRetryTimerRef.current);
+      clearTimer(slowBufferTimer);
+      clearTimer(stableRecoveryTimer);
+      clearTimer(slowNoticeTimer);
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('durationchange', handleDurationChange);
       video.removeEventListener('play', handlePlay);
@@ -390,6 +620,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
         clearTimeout(controlsTimeoutRef.current);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, token, streamUrl, retryKey]);
 
   const handleManualRetry = () => {
@@ -579,22 +810,44 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
       style={{ position: 'relative', overflow: 'hidden', backgroundColor: '#000', borderRadius: isFullscreen || isEmbed ? '0' : '12px', width: isEmbed ? '100vw' : undefined, height: isEmbed ? '100vh' : undefined, '--primary': primaryColor || '#4f46e5' } as React.CSSProperties}
     >
       {(isBuffering || isReconnecting) && !playbackError && (
-        <div className={`player-loading-overlay ${isReconnecting ? 'reconnecting' : ''}`} role="status">
-          <Loader2 className="spinner" size={48} color={primaryColor || "#4f46e5"} />
-          {isReconnecting && (
-            <span className="player-reconnecting-text">Reconnecting...</span>
+        <div className={`player-loading-overlay ${isReconnecting || isOffline ? 'reconnecting' : ''}`} role="status">
+          {isOffline && isBuffering ? (
+            <WifiOff size={44} color="#fff" />
+          ) : (
+            <Loader2 className="spinner" size={48} color={primaryColor || "#4f46e5"} />
           )}
+          {isOffline && isBuffering ? (
+            <span className="player-reconnecting-text">{t('player.offlineWaiting')}</span>
+          ) : isReconnecting ? (
+            <span className="player-reconnecting-text">{t('player.reconnecting')}</span>
+          ) : null}
+        </div>
+      )}
+
+      {!playbackError && (slowNotice || (isOffline && !isBuffering)) && (
+        <div className="player-network-notice" role="status">
+          {isOffline ? <WifiOff size={14} /> : <Wifi size={14} />}
+          <span>{isOffline ? t('player.offlineBuffered') : slowNotice}</span>
         </div>
       )}
 
       {playbackError && (
         <div className="player-error-overlay" role="alert">
-          <AlertTriangle className="player-error-icon" size={34} />
-          <div className="player-error-title">Video unavailable</div>
-          <div className="player-error-message">{playbackError}</div>
-          <button className="player-error-retry" type="button" onClick={handleManualRetry}>
-            Try again
-          </button>
+          {playbackError.kind === 'network' || playbackError.kind === 'timeout' ? (
+            <WifiOff className="player-error-icon" size={34} />
+          ) : (
+            <AlertTriangle className="player-error-icon" size={34} />
+          )}
+          <div className="player-error-title">{t(`player.errors.${playbackError.kind}.title`)}</div>
+          <div className="player-error-message">{t(`player.errors.${playbackError.kind}.message`)}</div>
+          {playbackError.code && (
+            <div className="player-error-code" dir="ltr">{t('player.errorCode', { code: playbackError.code })}</div>
+          )}
+          {playbackError.kind !== 'unsupported' && playbackError.kind !== 'notFound' && (
+            <button className="player-error-retry" type="button" onClick={handleManualRetry}>
+              {t('player.tryAgain')}
+            </button>
+          )}
         </div>
       )}
 
@@ -697,7 +950,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
                   onClick={(e) => { e.stopPropagation(); setIsSpeedMenuOpen(false); setIsQualityMenuOpen(!isQualityMenuOpen); }}
                 >
                   <Settings size={20} />
-                  <span className="quality-label">{selectedLevel === -1 ? 'Auto' : `${levels[selectedLevel]}p`}</span>
+                  <span className="quality-label">{selectedLevel === -1 ? (autoLevelHeight ? `${t('player.auto')} (${autoLevelHeight}p)` : t('player.auto')) : `${levels[selectedLevel]}p`}</span>
                 </button>
 
                 {isQualityMenuOpen && (
@@ -706,7 +959,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
                       onClick={(e) => { e.stopPropagation(); handleQualityChange(-1); }}
                       className={`quality-menu-item ${selectedLevel === -1 ? 'active' : ''}`}
                     >
-                      <span>Auto</span>
+                      <span>{t('player.auto')}{selectedLevel === -1 && autoLevelHeight ? ` (${autoLevelHeight}p)` : ''}</span>
                       {selectedLevel === -1 && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
                     </button>
                     {levels.map((height, index) => (
