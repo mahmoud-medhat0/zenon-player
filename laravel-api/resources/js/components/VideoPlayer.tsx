@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Hls, { type ErrorData } from 'hls.js';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, Loader2, RotateCcw, RotateCw, Gauge, WifiOff, Wifi } from 'lucide-react';
+import { AlertTriangle, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, Loader2, RotateCcw, RotateCw, Gauge, WifiOff, Wifi, Expand, Shrink } from 'lucide-react';
 
 const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const DOUBLE_CLICK_MS = 300;
@@ -17,6 +17,23 @@ const UNSTABLE_STALL_COUNT = 2;
 // How long playback must run without stalls before ABR is allowed to climb aggressively again.
 const STABLE_RECOVERY_MS = 90000;
 const SLOW_NOTICE_MS = 4000;
+
+// Fill (crop) vs. fit (letterbox) when the screen and video shapes differ,
+// e.g. a 16:9 video on a 20:9 phone in landscape.
+type FitMode = 'contain' | 'cover';
+const FIT_MODE_STORAGE_KEY = 'player-fit-mode';
+// Below this aspect-ratio difference the bars are too thin to bother.
+const MIN_LETTERBOX_RATIO = 0.04;
+// Pinch distance change needed to switch between fit and fill.
+const PINCH_THRESHOLD = 0.15;
+
+const readStoredFitMode = (): FitMode => {
+  try {
+    return localStorage.getItem(FIT_MODE_STORAGE_KEY) === 'cover' ? 'cover' : 'contain';
+  } catch {
+    return 'contain';
+  }
+};
 
 // ABR bandwidth safety factors: default vs. when the connection is unstable.
 const ABR_FACTORS_STABLE = { down: 0.8, up: 0.6 };
@@ -128,6 +145,9 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
   const [skipAnimation, setSkipAnimation] = useState<'forward' | 'backward' | null>(null);
   const [playbackError, setPlaybackError] = useState<PlaybackError | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [fitMode, setFitMode] = useState<FitMode>(readStoredFitMode);
+  const [isLetterboxed, setIsLetterboxed] = useState(false);
+  const pinchStartDistanceRef = useRef<number | null>(null);
 
   // Keep ref synchronized with state for event listeners
   playbackErrorRef.current = playbackError;
@@ -771,6 +791,72 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  // Track whether the video's shape differs from the player's (black bars),
+  // so the fit/fill toggle is only offered when it would change anything.
+  useEffect(() => {
+    const container = playerContainerRef.current;
+    const video = videoRef.current;
+    if (!container || !video) return;
+
+    const measure = () => {
+      const { width, height } = container.getBoundingClientRect();
+      if (!width || !height || !video.videoWidth || !video.videoHeight) {
+        setIsLetterboxed(false);
+        return;
+      }
+      const containerRatio = width / height;
+      const videoRatio = video.videoWidth / video.videoHeight;
+      setIsLetterboxed(Math.abs(containerRatio - videoRatio) / videoRatio > MIN_LETTERBOX_RATIO);
+    };
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    video.addEventListener('loadedmetadata', measure);
+    video.addEventListener('resize', measure);
+    measure();
+
+    return () => {
+      observer.disconnect();
+      video.removeEventListener('loadedmetadata', measure);
+      video.removeEventListener('resize', measure);
+    };
+  }, []);
+
+  const applyFitMode = (mode: FitMode) => {
+    setFitMode(mode);
+    try {
+      localStorage.setItem(FIT_MODE_STORAGE_KEY, mode);
+    } catch {}
+  };
+
+  const toggleFitMode = () => applyFitMode(fitMode === 'cover' ? 'contain' : 'cover');
+
+  const getTouchDistance = (touches: React.TouchList) =>
+    Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+
+  // Pinch out to fill the screen, pinch in to fit the whole video.
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    pinchStartDistanceRef.current = e.touches.length === 2 ? getTouchDistance(e.touches) : null;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const startDistance = pinchStartDistanceRef.current;
+    if (startDistance === null || e.touches.length !== 2 || !isLetterboxed) return;
+
+    const scale = getTouchDistance(e.touches) / startDistance;
+    if (scale > 1 + PINCH_THRESHOLD && fitMode !== 'cover') {
+      applyFitMode('cover');
+      pinchStartDistanceRef.current = null;
+    } else if (scale < 1 - PINCH_THRESHOLD && fitMode !== 'contain') {
+      applyFitMode('contain');
+      pinchStartDistanceRef.current = null;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    pinchStartDistanceRef.current = null;
+  };
+
   const handleMouseMove = () => {
     setShowControls(true);
     if (controlsTimeoutRef.current) {
@@ -807,6 +893,9 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
       ref={playerContainerRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       style={{ position: 'relative', overflow: 'hidden', backgroundColor: '#000', borderRadius: isFullscreen || isEmbed ? '0' : '12px', width: isEmbed ? '100vw' : undefined, height: isEmbed ? '100vh' : undefined, '--primary': primaryColor || '#4f46e5' } as React.CSSProperties}
     >
       {(isBuffering || isReconnecting) && !playbackError && (
@@ -863,7 +952,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
         onClick={handleVideoClick}
         playsInline
         poster={thumbnailUrl || undefined}
-        style={{ width: '100%', height: '100%', outline: 'none', objectFit: 'contain', cursor: 'pointer', backgroundColor: 'transparent' }}
+        style={{ width: '100%', height: '100%', outline: 'none', objectFit: isLetterboxed ? fitMode : 'contain', cursor: 'pointer', backgroundColor: 'transparent' }}
       />
 
       {!playbackError && <div
@@ -911,7 +1000,7 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
               />
             </div>
 
-            <div className="time-display">
+            <div className="time-display" dir="ltr">
               {formatTime(currentTime)} / {formatTime(duration)}
             </div>
           </div>
@@ -978,6 +1067,16 @@ export default function VideoPlayer({ videoId, token, onClose, isEmbed = false, 
                   </div>
                 )}
               </div>
+            )}
+            {isLetterboxed && (
+              <button
+                className="control-btn"
+                onClick={toggleFitMode}
+                title={fitMode === 'cover' ? t('player.fitToScreen') : t('player.fillScreen')}
+                aria-label={fitMode === 'cover' ? t('player.fitToScreen') : t('player.fillScreen')}
+              >
+                {fitMode === 'cover' ? <Shrink size={20} /> : <Expand size={20} />}
+              </button>
             )}
             <button className="control-btn" onClick={toggleFullscreen}>
               {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}

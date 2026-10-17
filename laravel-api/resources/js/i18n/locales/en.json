@@ -513,6 +513,8 @@
         "title": "Video unavailable",
         "message": "Playback failed. Please try again later."
       }
-    }
+    },
+    "fillScreen": "Fill screen",
+    "fitToScreen": "Fit to screen"
   }
 }
