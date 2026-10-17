@@ -21,7 +21,6 @@ class Tenant extends Model
         'webhook_url',
         'webhook_secret',
         'vimeo_access_token',
-        'bandwidth_used_bytes',
         'bandwidth_synced_at',
     ];
 
@@ -31,7 +30,6 @@ class Tenant extends Model
             'is_active' => 'boolean',
             'allowed_domains' => 'array',
             'vimeo_access_token' => 'encrypted',
-            'bandwidth_used_bytes' => 'integer',
             'bandwidth_synced_at' => 'datetime',
         ];
     }

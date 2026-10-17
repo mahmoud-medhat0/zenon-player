@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\BunnyBandwidthSyncService;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 
 class BunnySyncBandwidthCommand extends Command
@@ -12,14 +13,14 @@ class BunnySyncBandwidthCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'bunny:sync-bandwidth';
+    protected $signature = 'bunny:sync-bandwidth {--from= : Re-sync from this date (Y-m-d) instead of the start of the current month}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Fold newly available Bunny CDN log days into per-tenant bandwidth totals';
+    protected $description = 'Sync per-tenant daily bandwidth from Bunny statistics, split per tenant by the raw CDN logs';
 
     /**
      * Execute the console command.
@@ -31,9 +32,11 @@ class BunnySyncBandwidthCommand extends Command
             return self::SUCCESS;
         }
 
-        $synced = $bunnyBandwidth->syncPendingDays();
+        $from = $this->option('from') ? Carbon::parse($this->option('from'), 'UTC') : null;
 
-        $this->info("Processed {$synced} day(s) of Bunny logs.");
+        $synced = $bunnyBandwidth->sync($from);
+
+        $this->info("Synced bandwidth for {$synced} day(s).");
 
         return self::SUCCESS;
     }

@@ -24,10 +24,9 @@ return [
         'pull_zone' => env('BUNNY_PULL_ZONE'),
         'security_key' => env('BUNNY_SECURITY_KEY'),
         // Account-level key (Bunny dashboard > Account Settings > API Key).
-        // Used by BunnyBandwidthSyncService to download the shared pull
-        // zone's raw CDN logs and attribute real bytes served back to each
-        // tenant via their videos' GUIDs. Without it, bandwidth stays an
-        // estimate (size x views).
+        // Used by BunnyBandwidthSyncService to read the pull zone's daily
+        // bandwidth statistics and raw CDN logs, and split the real bytes
+        // served between tenants. Without it, bandwidth usage stays at 0.
         'account_api_key' => env('BUNNY_ACCOUNT_API_KEY'),
     ],
 

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class PlanService
@@ -70,19 +71,19 @@ class PlanService
         return round($bytes / (1024 * 1024 * 1024), 2);
     }
 
+    /**
+     * Bandwidth served this calendar month (UTC, matching Bunny's billing),
+     * from the daily rows kept by BunnyBandwidthSyncService. Reported in
+     * decimal GB like the Bunny dashboard.
+     */
     public function getBandwidthUsageGb(Tenant $tenant): float
     {
-        if (DB::table('bunny_log_syncs')->exists()) {
-            return round($tenant->bandwidth_used_bytes / (1024 * 1024 * 1024), 2);
-        }
+        $bytes = DB::table('tenant_bandwidth_usages')
+            ->where('tenant_id', $tenant->id)
+            ->where('date', '>=', Carbon::now('UTC')->startOfMonth()->toDateString())
+            ->sum('bytes');
 
-        // Fallback estimate until the Bunny log sync has processed at least
-        // one day (e.g. BUNNY_ACCOUNT_API_KEY isn't set yet): proxies usage
-        // as size x unique views, since the shared library gives no
-        // per-tenant breakdown on its own.
-        $bytes = $tenant->videos()->selectRaw('SUM(size_bytes * views) as total')->value('total') ?? 0;
-
-        return round($bytes / (1024 * 1024 * 1024), 2);
+        return round($bytes / 1_000_000_000, 2);
     }
 
     public function canStreamVideo(Tenant $tenant): bool
