@@ -13,4 +13,4 @@ Schedule::command('bunny:sync')->everyFiveMinutes()->withoutOverlapping();
 // Keeps this month's per-tenant bandwidth close to live. Each run rewrites
 // whole days, and Bunny keeps raw CDN logs (used for the per-tenant split)
 // for 3 days, so a failed run is caught up by the next one.
-Schedule::command('bunny:sync-bandwidth')->hourly()->withoutOverlapping();
+Schedule::command('bunny:sync-bandwidth')->everyTenMinutes()->withoutOverlapping();
