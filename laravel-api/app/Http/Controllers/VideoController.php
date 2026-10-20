@@ -6,6 +6,7 @@ use App\Models\Video;
 use App\Services\BunnyVideoStatusService;
 use App\Services\PlanService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Yajra\DataTables\Facades\DataTables;
 use OpenApi\Attributes as OA;
@@ -199,7 +200,7 @@ class VideoController extends Controller
             $cfDomain = env('CLOUDFLARE_CUSTOMER_DOMAIN', 'customer-zetj589d76kngmjr.cloudflarestream.com');
             return redirect("https://{$cfDomain}/{$video->cloudflare_uid}/thumbnails/thumbnail.jpg");
         } elseif ($video->bunny_video_id) {
-            return redirect($video->bunnySignedUrl('thumbnail.jpg'));
+            return $this->bunnyThumbnail($video);
         }
 
         $path = "videos/{$video->tenant_id}/{$video->id}_data/thumbnail.jpg";
@@ -209,6 +210,32 @@ class VideoController extends Controller
         }
         
         return response()->json(['message' => 'Not found'], 404);
+    }
+
+    /**
+     * The Bunny pull zone is referrer-protected: it serves files only to requests carrying an
+     * allowed Referer, which a browser playing on our domain sends and a server or a mobile app
+     * fetching an image does not. Redirecting there therefore gave every API client a 403 (and
+     * the centres a grey placeholder), so the image is fetched here, with our own domain as the
+     * referrer, and passed through.
+     */
+    private function bunnyThumbnail(Video $video)
+    {
+        $url = $video->bunnySignedUrl('thumbnail.jpg');
+
+        abort_unless($url, 404);
+
+        $response = Http::withHeaders(['Referer' => rtrim(config('app.url'), '/').'/'])
+            ->timeout(15)
+            ->get($url);
+
+        // Not encoded yet, or gone: the caller shows its placeholder.
+        abort_unless($response->successful(), 404);
+
+        return response($response->body(), 200, [
+            'Content-Type' => $response->header('Content-Type') ?: 'image/jpeg',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
     }
 
     public function uploadThumbnail(Request $request, $id)
